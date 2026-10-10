@@ -1,0 +1,23 @@
+{
+  "version": 2,
+  "commands": [
+    {
+      "name": "BIOS inventory",
+      "alias": "bios",
+      "description": "Read BIOS manufacturer, version, and serial number.",
+      "parameters": {},
+      "wmi": {
+        "operation": "query",
+        "namespace": "root/cimv2",
+        "class": "Win32_BIOS",
+        "properties": {
+          "Manufacturer": "string",
+          "SMBIOSBIOSVersion": "string",
+          "SerialNumber": "string"
+        },
+        "limits": {"rows": 10, "timeout_seconds": 15},
+        "columns": ["Manufacturer", "SMBIOSBIOSVersion", "SerialNumber"]
+      }
+    }
+  ]
+}

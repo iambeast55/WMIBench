@@ -1,0 +1,39 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "remoteops"
+version = "0.2.0"
+description = "Cross-platform persistent WinRM/PSRP administration console."
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+  { name = "RemoteOps" }
+]
+dependencies = [
+  "PySide6>=6.7",
+  "keyring>=25.0",
+  "pypsrp>=0.9.1,<0.10",
+  "pywin32>=308; sys_platform == 'win32'",
+  "pyspnego>=0.12.2"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "ruff>=0.6"
+]
+
+[project.scripts]
+remoteops = "remoteops.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/remoteops"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]

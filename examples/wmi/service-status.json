@@ -1,0 +1,22 @@
+{
+  "version": 2,
+  "commands": [
+    {
+      "name": "Custom service status",
+      "alias": "my-service",
+      "description": "Read a service by its exact name.",
+      "parameters": {
+        "service_name": "Spooler",
+        "_positional": ["service_name"],
+        "_schema": {"service_name": {"type": "str", "description": "Exact service name"}}
+      },
+      "wmi": {
+        "operation": "query",
+        "class": "Win32_Service",
+        "properties": {"Name": "string", "DisplayName": "string", "State": "string", "StartMode": "string"},
+        "filters": [{"property": "Name", "operator": "eq", "parameter": "service_name"}],
+        "limits": {"rows": 10, "timeout_seconds": 30}
+      }
+    }
+  ]
+}
