@@ -10,6 +10,7 @@ from typing import Iterator
 
 from remoteops.core.models import AuthMethod, CommandResult, ConnectionMode, CredentialProfile, Host, Transport, utc_now
 
+_UNCHANGED = object()
 
 def _dt(value: datetime) -> str:
     return value.isoformat()
@@ -20,7 +21,7 @@ def _parse_dt(value: str) -> datetime:
 
 
 class Repository:
-    """Small SQLite repository for the desktop MVP."""
+    """Host inventory, credentials, and command history."""
 
     def __init__(self, db_path: Path) -> None:
         self.db_path = db_path
@@ -76,13 +77,27 @@ class Repository:
                     started_at text not null,
                     completed_at text
                 );
+
+                create table if not exists credential_secrets (
+                    profile_id text primary key,
+                    ciphertext blob not null
+                );
+                create table if not exists host_groups (
+                    name text primary key collate nocase,
+                    position integer not null default 0
+                );
                 """
             )
 
             migrations = {
                 "hosts": {"connection_mode": "text not null default 'winrm'",
                           "wmi_namespace": "text not null default 'root/cimv2'",
-                          "keepalive_seconds": "integer not null default 60"},
+                          "keepalive_seconds": "integer not null default 60",
+                          "sort_order": "integer not null default 0",
+                          "kerberos_hostname": "text not null default ''"},
+                "credential_profiles": {"domain": "text not null default ''",
+                                        "domain_controller": "text not null default ''",
+                                        "dns_server": "text not null default ''"},
                 "command_history": {"command_line": "text not null default ''",
                                     "connection_mode": "text not null default 'winrm'",
                                     "records_json": "text not null default '[]'"},
@@ -93,10 +108,18 @@ class Repository:
                     if name not in existing:
                         conn.execute(f"alter table {table} add column {name} {definition}")
             conn.execute("create index if not exists history_host_id on command_history(host_id, id)")
+            conn.execute("insert or ignore into host_groups(name) select distinct group_name from hosts "
+                         "where group_name is not null and trim(group_name) != ''")
+            conn.execute("update hosts set group_name=null where trim(group_name)='' ")
+            conn.execute("update hosts set group_name=(select name from host_groups where name=hosts.group_name collate nocase) "
+                         "where group_name is not null")
 
     def save_host(self, host: Host) -> Host:
         host.updated_at = utc_now()
         with self.connect() as conn:
+            previous = conn.execute("select group_name from hosts where id=?", (host.id,)).fetchone()
+            host.group_name = self._ensure_group(conn, host.group_name) if host.group_name else None
+            append = previous is None or previous["group_name"] != host.group_name
             conn.execute(
                 """
                 insert into hosts (
@@ -133,11 +156,15 @@ class Repository:
                 "update hosts set connection_mode=?, wmi_namespace=?, keepalive_seconds=? where id=?",
                 (host.connection_mode.value, host.wmi_namespace, host.keepalive_seconds, host.id),
             )
+            if append:
+                conn.execute("update hosts set sort_order=(select coalesce(max(sort_order), -1)+1 from hosts "
+                             "where group_name is ? and id != ?) where id=?", (host.group_name, host.id, host.id))
+            conn.execute("update hosts set kerberos_hostname=? where id=?", (host.kerberos_hostname, host.id))
         return host
 
     def list_hosts(self) -> list[Host]:
         with self.connect() as conn:
-            rows = conn.execute("select * from hosts order by name collate nocase").fetchall()
+            rows = conn.execute("select * from hosts order by sort_order, name collate nocase").fetchall()
         return [self._host_from_row(row) for row in rows]
 
     def get_host(self, host_id: str) -> Host | None:
@@ -149,7 +176,70 @@ class Repository:
         with self.connect() as conn:
             conn.execute("delete from hosts where id = ?", (host_id,))
 
-    def save_credential_profile(self, profile: CredentialProfile) -> CredentialProfile:
+    @staticmethod
+    def _group_name(name):
+        if not isinstance(name, str) or not name.strip() or len(name.strip()) > 80 or any(ord(c) < 32 for c in name):
+            raise ValueError("Group names must contain 1-80 characters without line breaks.")
+        return name.strip()
+
+    def _ensure_group(self, conn, name):
+        name = self._group_name(name)
+        row = conn.execute("select name from host_groups where name=?", (name,)).fetchone()
+        if row:
+            return row["name"]
+        conn.execute("insert into host_groups(name, position) values (?, (select coalesce(max(position),-1)+1 from host_groups))", (name,))
+        return name
+
+    def list_host_groups(self):
+        with self.connect() as conn:
+            return [row["name"] for row in conn.execute("select name from host_groups order by position, name collate nocase")]
+
+    def create_host_group(self, name):
+        name = self._group_name(name)
+        with self.connect() as conn:
+            if conn.execute("select 1 from host_groups where name=?", (name,)).fetchone():
+                raise ValueError("A group with that name already exists.")
+            return self._ensure_group(conn, name)
+
+    def rename_host_group(self, old, new):
+        new = self._group_name(new)
+        with self.connect() as conn:
+            group = conn.execute("select name from host_groups where name=?", (old,)).fetchone()
+            if group is None:
+                raise ValueError("Group no longer exists.")
+            if old.casefold() != new.casefold() and conn.execute("select 1 from host_groups where name=?", (new,)).fetchone():
+                raise ValueError("A group with that name already exists.")
+            conn.execute("update host_groups set name=? where name=?", (new, old))
+            conn.execute("update hosts set group_name=?, updated_at=? where group_name=? collate nocase",
+                         (new, _dt(utc_now()), old))
+
+    def delete_host_group(self, name):
+        with self.connect() as conn:
+            offset = conn.execute("select coalesce(max(sort_order),-1)+1 from hosts where group_name is null").fetchone()[0]
+            rows = conn.execute("select id from hosts where group_name=? collate nocase order by sort_order, name collate nocase", (name,)).fetchall()
+            for index, row in enumerate(rows):
+                conn.execute("update hosts set group_name=null, sort_order=?, updated_at=? where id=?",
+                             (offset + index, _dt(utc_now()), row["id"]))
+            conn.execute("delete from host_groups where name=?", (name,))
+
+    def save_inventory_order(self, groups):
+        """Commit a complete tree snapshot, or reject it if inventory changed."""
+        with self.connect() as conn:
+            expected_groups = {row[0] for row in conn.execute("select name from host_groups")}
+            expected_hosts = {row[0] for row in conn.execute("select id from hosts")}
+            names = [name for name, _ in groups]
+            ids = [host_id for _, hosts in groups for host_id in hosts]
+            if (len(names) != len(set(names)) or set(names) != expected_groups | {None}
+                    or len(ids) != len(set(ids)) or set(ids) != expected_hosts):
+                raise ValueError("Host inventory changed. Refresh and try again.")
+            for position, (name, hosts) in enumerate(groups):
+                if name is not None:
+                    conn.execute("update host_groups set position=? where name=?", (position, name))
+                for order, host_id in enumerate(hosts):
+                    conn.execute("update hosts set group_name=?, sort_order=?, updated_at=? where id=?",
+                                 (name, order, _dt(utc_now()), host_id))
+
+    def save_credential_profile(self, profile: CredentialProfile, *, encrypted_secret=_UNCHANGED) -> CredentialProfile:
         profile.updated_at = utc_now()
         with self.connect() as conn:
             conn.execute(
@@ -175,7 +265,33 @@ class Repository:
                     _dt(profile.updated_at),
                 ),
             )
+            conn.execute("update credential_profiles set domain=?, domain_controller=?, dns_server=? where id=?",
+                         (profile.domain, profile.domain_controller, profile.dns_server, profile.id))
+            if encrypted_secret is None:
+                conn.execute("delete from credential_secrets where profile_id = ?", (profile.id,))
+            elif encrypted_secret is not _UNCHANGED:
+                conn.execute(
+                    "insert into credential_secrets(profile_id, ciphertext) values (?, ?) "
+                    "on conflict(profile_id) do update set ciphertext=excluded.ciphertext",
+                    (profile.id, encrypted_secret),
+                )
         return profile
+
+    def get_encrypted_secret(self, profile_id: str) -> bytes | None:
+        with self.connect() as conn:
+            row = conn.execute("select ciphertext from credential_secrets where profile_id = ?", (profile_id,)).fetchone()
+        return bytes(row[0]) if row else None
+
+    def has_saved_secrets(self) -> bool:
+        with self.connect() as conn:
+            return conn.execute("select 1 from credential_secrets limit 1").fetchone() is not None
+
+    def delete_credential_profile(self, profile_id: str) -> None:
+        with self.connect() as conn:
+            conn.execute("update hosts set auth_profile_id = null, updated_at = ? where auth_profile_id = ?",
+                         (_dt(utc_now()), profile_id))
+            conn.execute("delete from credential_secrets where profile_id = ?", (profile_id,))
+            conn.execute("delete from credential_profiles where id = ?", (profile_id,))
 
     def list_credential_profiles(self) -> list[CredentialProfile]:
         with self.connect() as conn:
@@ -279,6 +395,7 @@ class Repository:
             connection_mode=ConnectionMode(row["connection_mode"]),
             wmi_namespace=row["wmi_namespace"],
             keepalive_seconds=row["keepalive_seconds"],
+            kerberos_hostname=row["kerberos_hostname"],
             created_at=_parse_dt(row["created_at"]),
             updated_at=_parse_dt(row["updated_at"]),
         )
@@ -290,6 +407,9 @@ class Repository:
             username=row["username"],
             method=AuthMethod(row["method"]),
             prompt_for_secret=bool(row["prompt_for_secret"]),
+            domain=row["domain"],
+            domain_controller=row["domain_controller"],
+            dns_server=row["dns_server"],
             created_at=_parse_dt(row["created_at"]),
             updated_at=_parse_dt(row["updated_at"]),
         )

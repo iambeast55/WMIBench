@@ -141,6 +141,37 @@ class ClientFixture(unittest.TestCase):
 
 
 class PersistentClientTests(ClientFixture):
+    def test_delete_instance_once_and_provider_error_keeps_channel(self):
+        self.connect()
+        key = (wire.WBEM_SERVICES_INTERFACE, 16)
+        self.overrides[key] = bytes(16)
+        self.assertTrue(self.client.delete_instance('Example.Name="x"')["Deleted"])
+        self.overrides[key] = bytes(12) + struct.pack("<I", 0x80041003)
+        with self.assertRaises(query.WmiQueryError):
+            self.client.delete_instance('Example.Name="x"')
+        self.assertTrue(self.client.ready)
+        self.assertFalse(self.client.uncertain)
+        self.assertEqual(self.client.query_os(), [EXPECTED])
+        self.assertEqual(sum((iid, opnum) == key for iid, opnum, *_ in self.calls), 2)
+
+    def test_delete_lost_reply_is_uncertain_and_not_replayed(self):
+        self.connect()
+        key = (wire.WBEM_SERVICES_INTERFACE, 16)
+        self.overrides[key] = RpcProbeError("lost reply")
+        with self.assertRaisesRegex(RpcProbeError, "DeleteInstance outcome unconfirmed"):
+            self.client.delete_instance('Example.Name="x"')
+        self.assertTrue(self.client.closed)
+        self.assertEqual(sum((iid, opnum) == key for iid, opnum, *_ in self.calls), 1)
+
+    def test_delete_bad_response_retires_channel_without_retry(self):
+        self.connect()
+        key = (wire.WBEM_SERVICES_INTERFACE, 16)
+        self.overrides[key] = bytes(8) + struct.pack("<II", 1, 0)
+        with self.assertRaisesRegex(RpcProbeError, "unrequested ppCallResult"):
+            self.client.delete_instance('Example.Name="x"')
+        self.assertTrue(self.client.closed)
+        self.assertEqual(sum((iid, opnum) == key for iid, opnum, *_ in self.calls), 1)
+
     def test_catalog_multirow_and_empty_results_release_enumerator(self):
         from remoteops.commands.wmi_catalog import make_query
         from test_wmi_values import instance_fixture
@@ -197,6 +228,53 @@ class PersistentClientTests(ClientFixture):
         self.assertEqual(self.client.namespace, "root\\standardcimv2")
         with self.assertRaisesRegex(ValueError, "require root/cimv2"):
             self.client.invoke('Win32_Service.Name="A"', "StopService", {}, 10)
+
+    def test_custom_relative_namespace_connects_without_os_probe(self):
+        self.client.connect("192.0.2.10", "synthetic", "synthetic", "root/vendor/example", probe_os=False)
+        self.assertTrue(self.client.ready)
+        self.assertEqual(self.query_count, 0)
+        self.assertEqual(self.client.namespace, "root\\vendor\\example")
+
+    def test_generic_method_projects_outputs_and_retains_decode_failure(self):
+        from test_wmi_values import instance_fixture
+        from test_wmi_methods import response
+        self.connect()
+        fields = {"ReturnValue": 19, "Values": 0x2008}
+        rows = {"ReturnValue": 0, "Values": ["one", "two"]}
+        self.overrides[(wire.WBEM_SERVICES_INTERFACE, 24)] = response(instance_fixture("__PARAMETERS", fields, rows))
+        result = self.client.invoke("Example", "ReadValues", {"Count": (19, 2)}, outputs=fields)
+        self.assertEqual(result, rows)
+        with self.assertRaisesRegex(query.WmiQueryError, "outcome unconfirmed"):
+            self.client.invoke("Example", "ReadValues", {}, outputs={"Missing": 8})
+        self.assertTrue(self.client.ready)
+        self.assertFalse(self.client.closed)
+        self.assertEqual(self.client.uncertain, [])
+        self.assertEqual(len([c for c in self.calls if c[:2] == (wire.WBEM_SERVICES_INTERFACE, 24)]), 2)
+        self.assertEqual(self.client.query_os(), [EXPECTED])
+
+    def test_generic_method_validation_is_local_and_lost_reply_is_not_replayed(self):
+        self.connect()
+        with self.assertRaises(ValueError):
+            self.client.invoke("Example", "Change", {"Value": (19, -1)}, outputs={"ReturnValue": 19})
+        self.assertFalse(any(c[:2] == (wire.WBEM_SERVICES_INTERFACE, 24) for c in self.calls))
+        self.overrides[(wire.WBEM_SERVICES_INTERFACE, 24)] = TimeoutError()
+        with self.assertRaisesRegex(RpcProbeError, "outcome unconfirmed"):
+            self.client.invoke("Example", "Change", {}, outputs={"ReturnValue": 19})
+        self.assertTrue(self.client.closed)
+        self.assertEqual(len([c for c in self.calls if c[:2] == (wire.WBEM_SERVICES_INTERFACE, 24)]), 1)
+
+    def test_null_method_reply_keeps_channel_and_never_replays(self):
+        from test_wmi_methods import response
+        self.connect()
+        self.overrides[(wire.WBEM_SERVICES_INTERFACE, 24)] = response()
+        with self.assertRaisesRegex(query.WmiQueryError, "outcome unconfirmed"):
+            self.client.invoke("Example", "Change", {}, outputs={"ReturnValue": 19})
+        self.assertTrue(self.client.ready)
+        self.assertEqual(self.client.invoke("Example", "Change", {}, outputs={"ReturnValue": 19},
+                                            allow_no_output=True), {})
+        self.assertEqual(len([c for c in self.calls if c[:2] == (wire.WBEM_SERVICES_INTERFACE, 24)]), 2)
+        self.assertEqual(self.client.uncertain, [])
+        self.assertEqual(self.client.query_os(), [EXPECTED])
 
     def test_method_response_and_lost_reply_are_not_retried(self):
         from test_wmi_methods import output_object, response

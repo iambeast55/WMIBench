@@ -11,6 +11,7 @@ it does not provide bulk service changes or arbitrary PowerShell execution.
 2. Choose an alias or enter an alias plus arguments, for example
    `events --log System --count 5` or `pending-reboot`. The Preflight column shows
    unsupported commands, busy hosts, missing profiles, and connection requirements.
+   Editing arguments updates preflight only; it does not start the batch.
 3. Set Parallel hosts (1 to 12, default 4).
 4. Connected hosts reuse their current sessions without a password prompt. To
    include disconnected hosts, enable Connect disconnected hosts. Run selected
@@ -53,7 +54,8 @@ The table's own export saves its visible rows. The footer's **Export all batch r
 as CSV** icon exports the complete current batch, independent of table filters or
 display limits. CSV cells beginning with spreadsheet formula markers are quoted as text.
 
-Dispatched commands also appear in each host's Terminal, Table, and History.
+Dispatched commands also appear in each host's Terminal and History, including
+History's structured result table.
 Skipped hosts have no command-history entry because no command was attempted.
 Batch summaries remain in the dialog until it closes or another run begins; use
 the CSV export to retain the full batch summary, including skipped hosts.

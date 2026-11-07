@@ -18,7 +18,7 @@ class ErrorSummaryTests(unittest.TestCase):
             ("StopService failed: ReturnValue=2", "service action"),
             ("Event log changed during retrieval", "Run the events query"),
             ("WMI enumeration exceeded row cap 10", "too large"),
-            ("Traceback: unclassified failure", "error details"),
+            ("Traceback: unclassified failure", "diagnostic below"),
         ):
             with self.subTest(detail=detail):
                 self.assertIn(expected, error_summary(detail))
@@ -31,3 +31,10 @@ class ErrorSummaryTests(unittest.TestCase):
         self.assertIn("Check the remote state", summary)
         self.assertIn("still connected", summary)
         self.assertNotIn("Try a smaller", summary)
+
+    def test_local_method_preparation_failure_is_not_an_uncertain_action(self):
+        summary = error_summary("WMI method preparation failed; action was not sent: missing member",
+                                SessionState.CONNECTED)
+        self.assertIn("No action was sent", summary)
+        self.assertIn("still connected", summary)
+        self.assertNotIn("unknown", summary)

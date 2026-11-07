@@ -212,6 +212,18 @@ class MethodResponseTests(unittest.TestCase):
             with self.assertRaises(RpcProtocolError):
                 methods.decode_method(reply, {"ReturnValue": 19})
 
+    def test_explicit_null_output_requires_complete_success_reply(self):
+        self.assertEqual(methods.decode_method(response(), {"ReturnValue": 19}, allow_no_output=True), {})
+        with self.assertRaisesRegex(wmi_query.WmiQueryError, "outcome unconfirmed"):
+            methods.decode_method(response(), {"ReturnValue": 19})
+        with self.assertRaises(DcomStatusError):
+            methods.decode_method(response(status=0x80041001), {"ReturnValue": 19}, allow_no_output=True)
+        for reply in (response(outer=0), response(callresult=1), response() + b"extra", response()[:-1]):
+            with self.subTest(reply=reply), self.assertRaises(RpcProtocolError):
+                methods.decode_method(reply, {"ReturnValue": 19}, allow_no_output=True)
+        self.assertEqual(methods.decode_method(response(output_object(5)), {"ReturnValue": 19},
+                                              allow_no_output=True), {"ReturnValue": 5})
+
     def test_null_missing_extra_and_single_pointer_shapes(self):
         valid = response(output_object())
         replies = [response(), response(outer=0), response(output_object(), inner=0),

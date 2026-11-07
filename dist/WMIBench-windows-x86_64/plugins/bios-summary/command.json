@@ -1,0 +1,13 @@
+{
+  "api_version": 1,
+  "alias": "bios-summary",
+  "name": "BIOS summary",
+  "description": "Read BIOS vendor and version.",
+  "category": "Python",
+  "parameters": {},
+  "backends": [
+    "wmi_dcom"
+  ],
+  "modifies_remote": false,
+  "entry_point": "implementation.py:run"
+}

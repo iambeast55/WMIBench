@@ -1,0 +1,11 @@
+{
+  "api_version": 3,
+  "alias": "auth-package-check",
+  "name": "Authentication package check",
+  "description": "Offline packaging fixture.",
+  "category": "Tests",
+  "parameters": {},
+  "backends": ["wmi_dcom", "winrm"],
+  "modifies_remote": false,
+  "entry_point": "implementation.py:run"
+}

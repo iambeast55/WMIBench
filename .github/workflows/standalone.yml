@@ -1,0 +1,51 @@
+name: Standalone executables
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+permissions:
+  contents: read
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2022, ubuntu-22.04]
+    runs-on: ${{ matrix.os }}
+    env:
+      QT_QPA_PLATFORM: offscreen
+      PYTHONPATH: src
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Linux desktop runtime
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libegl1 libopengl0 libxkbcommon0 libxcb-cursor0 libxcb-xinerama0 libxcb-icccm4 libxcb-keysyms1 libxcb-image0 libxcb-render-util0 libxcb-xkb1 libxkbcommon-x11-0
+      - run: python -m pip install . -r packaging/standalone/requirements.txt
+      - run: python -m unittest discover -s tests
+      - run: python packaging/standalone/build.py --bundle
+      - name: Windows packaged smoke checks
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PYTHONPATH = ''
+          & ./dist/WMIBench-windows-x86_64/WMIBench.exe --self-test
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./dist/WMIBench-windows-x86_64/WMIBench.exe --plugin-cli test examples/plugins/scheduled-task --trust
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & ./dist/WMIBench-windows-x86_64/WMIBench.exe --plugin-cli test examples/plugins/registry --trust
+          exit $LASTEXITCODE
+      - name: Linux packaged smoke checks
+        if: runner.os == 'Linux'
+        run: |
+          unset PYTHONPATH
+          ./dist/WMIBench-linux-x86_64/wmibench --self-test
+          ./dist/WMIBench-linux-x86_64/wmibench --plugin-cli test examples/plugins/scheduled-task --trust
+          ./dist/WMIBench-linux-x86_64/wmibench --plugin-cli test examples/plugins/registry --trust
+      - uses: actions/upload-artifact@v4
+        with:
+          name: WMIBench-${{ runner.os }}-x86_64
+          path: dist/WMIBench-*/
+          if-no-files-found: error

@@ -112,7 +112,7 @@ class BatchUiTests(unittest.TestCase):
         self.dialog.refresh_preflight()
         self.assertIn("2 succeeded", self.dialog.status.text())
         self.assertTrue(all(session.state is SessionState.CONNECTED for session in sessions))
-        self.assertIn("remoteops [batch]> sysinfo", self.window.host_tabs_by_id[self.hosts[0].id].terminal.toPlainText())
+        self.assertIn("wmibench [batch]> sysinfo", self.window.host_tabs_by_id[self.hosts[0].id].terminal.toPlainText())
         folder = os.environ.get("REMOTEOPS_CAPTURE_DIR")
         if folder:
             target = Path(folder)

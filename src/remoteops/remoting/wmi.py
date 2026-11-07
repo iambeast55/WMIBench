@@ -12,6 +12,7 @@ from threading import Timer, get_native_id
 from datetime import datetime, timezone, timedelta
 
 from remoteops.core.models import AuthMethod, CommandResult, SessionState, utc_now
+from remoteops.core.authentication import portable_kerberos
 from remoteops.commands.wmi_catalog import WMI_ALIASES, WmiCommandError, execute_command
 from remoteops.commands.wmi_definitions import execute_query_plan
 from remoteops.remoting.output import plain_value, records_text
@@ -33,7 +34,7 @@ def _is_provider_error(exc):
 
 
 def wmi_session_factory(host, profile):
-    if sys.platform == "win32":
+    if sys.platform == "win32" and not portable_kerberos(profile) and (profile is None or profile.method != AuthMethod.NTLM_HASH):
         return WmiSession(host, profile)
     from remoteops.remoting.dcom_session import DcomWmiSession
     return DcomWmiSession(host, profile)
@@ -133,25 +134,73 @@ class NativeWmiClient:
                 if name.casefold() not in folded:
                     raise RemoteSessionError(f"{spec.class_name} omitted projected property {name}")
                 value = folded[name.casefold()]
-                if value is not None and kind in (2, 3, 16, 17, 18, 19, 20, 21):
-                    value = int(value)
+                if value is not None and (kind & ~0x2000) in (2, 3, 16, 17, 18, 19, 20, 21):
+                    value = [int(item) for item in value] if kind & 0x2000 else int(value)
                 output[name] = value
             normalized.append(output)
         return normalized
 
-    def invoke(self, path, method, inputs, timeout_seconds):
+    def invoke(self, path, method, inputs, timeout_seconds, *, outputs=None, allow_no_output=False):
         from remoteops.remoting.wmi_methods import _validate_method
 
-        method = _validate_method(path, method, inputs)
+        if type(allow_no_output) is not bool or (allow_no_output and outputs is None):
+            raise ValueError("allow_no_output requires a boolean and an explicit output schema")
+        if outputs is None:
+            method = _validate_method(path, method, inputs)
+        else:
+            from remoteops.commands.wmi_invocation import validate_call
+            validate_call(path, method, inputs, outputs)
         with com_timeout(timeout_seconds):
-            parameters = None
-            if inputs:
-                definition = self.services.Get(path)
-                parameters = definition.Methods_(method).InParameters.SpawnInstance_()
-                for name, (_, value) in inputs.items():
-                    parameters.Properties_(name).Value = value
-            output = self.services.ExecMethod_(path, method, parameters)
-            return {prop.Name: plain_value(prop.Value) for prop in output.Properties_}
+            try:
+                # SWbemServices uses ExecMethod; ExecMethod_ belongs to SWbemObject.
+                execute = self.services.ExecMethod
+                parameters = None
+                if inputs:
+                    definition = self.services.Get(path)
+                    parameters = definition.Methods_(method).InParameters.SpawnInstance_()
+                    for name, (kind, value) in inputs.items():
+                        prop = parameters.Properties_(name)
+                        if outputs is not None and (int(prop.CIMType) | (0x2000 if prop.IsArray else 0)) != kind:
+                            raise ValueError(f"Provider input type differs from declaration for {name}")
+                        prop.Value = value
+            except (AttributeError, TypeError) as exc:
+                raise WmiCommandError(f"WMI method preparation failed; action was not sent: {exc}") from exc
+            output = execute(path, method, parameters)
+            if output is None:
+                if allow_no_output:
+                    # The synchronous COM call completed without an HRESULT error.
+                    # Do not invent the missing provider ReturnValue or replay the action.
+                    return {}
+                raise WmiCommandError(
+                    "Method returned no output object; outcome unconfirmed; do not automatically retry")
+            if outputs is None:
+                return {prop.Name: plain_value(prop.Value) for prop in output.Properties_}
+            try:
+                properties = {prop.Name.casefold(): prop for prop in output.Properties_}
+                result = {}
+                for name, kind in outputs.items():
+                    prop = properties[name.casefold()]
+                    if (int(prop.CIMType) | (0x2000 if prop.IsArray else 0)) != kind:
+                        raise ValueError(f"Provider output type differs from declaration for {name}")
+                    value = plain_value(prop.Value)
+                    base = kind & ~0x2000
+                    if value is not None and base in (2, 3, 16, 17, 18, 19, 20, 21):
+                        value = [int(item) for item in value] if kind & 0x2000 else int(value)
+                    result[name] = value
+                return result
+            except Exception as exc:
+                raise WmiCommandError(f"Method result could not be read; outcome unconfirmed; do not automatically retry: {exc}") from exc
+
+    def delete_instance(self, path, timeout_seconds):
+        from remoteops.commands.wmi_invocation import compile_delete
+        compile_delete(path)
+        with com_timeout(timeout_seconds):
+            try:
+                delete = self.services.Delete
+            except (AttributeError, TypeError) as exc:
+                raise WmiCommandError(f"WMI method preparation failed; action was not sent: {exc}") from exc
+            delete(path, 0)
+        return {"Deleted": True, "Path": path}
 
     def close(self):
         self.services = None
@@ -190,7 +239,7 @@ class WmiSession(PersistentSession):
         raise RemoteSessionError("WMI only accepts validated native command operations")
 
     def run_prepared(self, command, timeout_seconds=120):
-        if not command.native_wmi or (command.wmi_plan is None and command.alias not in WMI_ALIASES):
+        if not command.native_wmi or (command.delete_plan is None and command.method_plan is None and command.wmi_plan is None and command.alias not in WMI_ALIASES):
             raise RemoteSessionError("This command has no native WMI implementation")
         if self.state is not SessionState.CONNECTED or self.client is None:
             raise RemoteSessionError("WMI session is not connected")
@@ -214,21 +263,42 @@ class WmiSession(PersistentSession):
             except Exception as exc:
                 self._operation_error(client, exc)
 
-        def method(namespace, path, name, inputs, timeout):
+        def method(namespace, path, name, inputs, timeout, outputs=None, allow_no_output=False):
             actions.append(f"{namespace}: {path}.{name}({inputs!r})")
             deadline = time.monotonic() + timeout
             client = self._namespace_client(namespace, timeout)
             budget = remaining(deadline)
             try:
-                return client.invoke(path, name, inputs, budget)
+                options = {"outputs": outputs} if outputs is not None else {}
+                if allow_no_output:
+                    options["allow_no_output"] = True
+                return client.invoke(path, name, inputs, budget, **options)
             except Exception as exc:
-                if _is_provider_error(exc):
+                if _is_provider_error(exc) or isinstance(exc, (WmiCommandError, ValueError)):
                     raise WmiCommandError(str(exc)) from exc
                 self._operation_error(client, RuntimeError(
                     f"{name} outcome unconfirmed; do not automatically retry: {exc}"))
 
         try:
-            if command.wmi_plan is not None:
+            if command.delete_plan is not None:
+                plan = command.delete_plan
+                budget = min(timeout_seconds, plan.timeout_seconds)
+                deadline = time.monotonic() + budget
+                client = self._namespace_client(plan.namespace, budget)
+                actions.append(f"{plan.namespace}: DeleteInstance {plan.path}")
+                budget = remaining(deadline)
+                try:
+                    rows = [client.delete_instance(plan.path, budget)]
+                except Exception as exc:
+                    if _is_provider_error(exc) or isinstance(exc, (WmiCommandError, ValueError)):
+                        raise WmiCommandError(str(exc)) from exc
+                    self._operation_error(client, RuntimeError(
+                        f"DeleteInstance outcome unconfirmed; do not automatically retry: {exc}"))
+            elif command.method_plan is not None:
+                plan = command.method_plan
+                rows = [method(plan.namespace, plan.path, plan.method, plan.inputs,
+                               min(timeout_seconds, plan.timeout_seconds), plan.outputs, plan.allow_no_output)]
+            elif command.wmi_plan is not None:
                 rows = execute_query_plan(command.wmi_plan, query, min(timeout_seconds, 60))
             else:
                 rows, _ = execute_command(command.alias, command.values, query, method, min(timeout_seconds, 60))
@@ -265,6 +335,8 @@ class WmiSession(PersistentSession):
     def _namespace_client(self, namespace, timeout):
         key = namespace.replace("\\", "/").casefold()
         if key not in self.namespace_clients:
+            if len(self.namespace_clients) >= 16:
+                raise WmiCommandError("WMI namespace limit reached (16 cached namespaces); existing sessions retained")
             try:
                 self.namespace_clients[key] = self.client_factory(
                     replace(self.host, wmi_namespace=namespace), self.profile, self.credential,

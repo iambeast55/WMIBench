@@ -106,7 +106,7 @@ class QuerySpec:
         if not isinstance(self.namespace, str):
             raise ValueError("Invalid WMI namespace")
         parts = self.namespace.replace("\\", "/").split("/")
-        if len(parts) < 2 or parts[0].casefold() != "root":
+        if parts[0].casefold() != "root":
             raise ValueError("WMI namespace must be relative to the connected host under root")
         for part in parts:
             _identifier(part)

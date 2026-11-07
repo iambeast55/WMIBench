@@ -8,8 +8,9 @@ https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmi/cbce28cd-fd
 https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmio/0ac1987a-b6e9-4288-bc4a-0a8ca8555fc6
 https://learn.microsoft.com/en-us/openspecs/windows_protocols/ms-wmio/96d48962-118e-4c2f-bd6d-8046fb81ef64
 
-The synthetic input class follows the grammar; provider interoperability has
-not been established by a live call or a native-marshaler fixture.
+The generic scalar/flat-array input class follows the grammar; provider interoperability
+has not been established by a live call or a native-marshaler fixture. Legacy built-in
+calls retain their narrower validation and the independent EnumKey wire fixture.
 """
 from __future__ import annotations
 
@@ -87,13 +88,38 @@ def _encoded_string(text: str) -> bytes:
     return b"\1" + text.encode("utf-16-le") + b"\0\0"
 
 
-def _enum_parameters(inputs: dict[str, tuple[int, object]]) -> bytes:
-    """Emit only the already-validated EnumKey input instance, without NDR padding."""
+def _parameters(inputs: dict[str, tuple[int, object]]) -> bytes:
+    """Emit a bounded typed input instance; input order supplies parameter ID qualifiers."""
     class_heap = bytearray(_encoded_string("__PARAMETERS"))
+    instance_heap = bytearray(_encoded_string("__PARAMETERS"))
+
+    def check_heap_budget():
+        if len(class_heap) + len(instance_heap) > MAX_REQUEST_BYTES:
+            raise ValueError(f"ExecMethod request exceeds {MAX_REQUEST_BYTES} bytes")
+
+    def encoded_value(kind, value):
+        base = kind & ~0x2000
+        if kind & 0x2000:
+            values = b"".join(encoded_value(base, item) for item in value)
+            offset = len(instance_heap)
+            instance_heap.extend(struct.pack("<I", len(value)) + values)
+            check_heap_budget()
+            return struct.pack("<I", offset)
+        if base in (8, 101, 102):
+            offset = len(instance_heap)
+            instance_heap.extend(_encoded_string(value))
+            check_heap_budget()
+            return struct.pack("<I", offset)
+        if base == 11:
+            value = 0xFFFF if value else 0
+        elif base == 103:
+            value = ord(value)
+        return struct.pack("<" + wmi_query.VALUE_FORMATS[base], value)
 
     def string_ref(text: str) -> int:
         offset = len(class_heap)
         class_heap.extend(_encoded_string(text))
+        check_heap_budget()
         return offset
 
     def qualifier(name: str, kind: int, value: bytes, flavor: int) -> bytes:
@@ -101,23 +127,31 @@ def _enum_parameters(inputs: dict[str, tuple[int, object]]) -> bytes:
 
     # No HeapItem is shared, including repeated qualifier-name strings (2.2.66).
     abstract = qualifier("abstract", 11, b"\xff\xff", 0x10)
-    lookup = bytearray()
-    for order, (name, kind) in enumerate(_ENUM_INPUTS.items()):
+    lookup_entries = []
+    size = (len(inputs) + 3) // 4
+    defaults_nd, instance_nd = bytearray(size), bytearray(size)
+    defaults, values = bytearray(), bytearray()
+    for order, (name, (kind, value)) in enumerate(inputs.items()):
         name_ref = string_ref(name)
         qualifiers = qualifier("in", 11, b"\xff\xff", 0x12)
         qualifiers += qualifier("ID", 3, struct.pack("<i", order), 0x12)
         info_ref = len(class_heap)
-        class_heap.extend(struct.pack("<IHII", kind, order, order * 4, 0))
+        class_heap.extend(struct.pack("<IHII", kind, order, len(values), 0))
         class_heap.extend(_block(qualifiers))
-        lookup.extend(struct.pack("<II", name_ref, info_ref))
+        lookup_entries.append((name.casefold(), struct.pack("<II", name_ref, info_ref)))
+        width = 4 if kind & 0x2000 else struct.calcsize("<" + wmi_query.VALUE_FORMATS[kind])
+        defaults_nd[order // 4] |= 1 << (2 * (order % 4))
+        defaults.extend(b"\xff" * width)
+        if value is None:
+            instance_nd[order // 4] |= 1 << (2 * (order % 4))
+            values.extend(bytes(width))
+        else:
+            values.extend(encoded_value(kind, value))
 
-    # Two locally declared properties, both class defaults NULL; instance values explicit.
-    cls = b"\0" + struct.pack("<II", 0, 9) + _block(b"") + _block(abstract)
-    cls += struct.pack("<I", 2) + lookup + b"\x05" + b"\xff" * 8 + _heap(class_heap)
-    instance_heap = _encoded_string("__PARAMETERS")
-    values = struct.pack("<II", inputs["hDefKey"][1], len(instance_heap))
-    instance_heap += _encoded_string(inputs["sSubKeyName"][1])
-    instance = b"\0" + bytes(4) + b"\0" + values + _block(b"") + b"\1"
+    lookup = b"".join(entry for _, entry in sorted(lookup_entries))
+    cls = b"\0" + struct.pack("<II", 0, size + len(values)) + _block(b"") + _block(abstract)
+    cls += struct.pack("<I", len(inputs)) + lookup + defaults_nd + defaults + _heap(class_heap)
+    instance = b"\0" + bytes(4) + instance_nd + values + _block(b"") + b"\1"
     instance += _heap(instance_heap)
     payload = b"\2" + _block(cls) + _block(instance)
     envelope = struct.pack("<II", 0x574F454D, 4)
@@ -125,19 +159,28 @@ def _enum_parameters(inputs: dict[str, tuple[int, object]]) -> bytes:
     return envelope + bytes(8) + struct.pack("<II", 0x12345678, len(payload)) + payload
 
 
-def method_request(version: tuple[int, int], causality: UUID, path: str, method: str,
-                   inputs: dict[str, tuple[int, object]]) -> bytes:
-    """Build op24 for a namespace-relative whitelisted path, with synchronous outputs.
+def _enum_parameters(inputs):
+    return _parameters({name: inputs[name] for name in _ENUM_INPUTS})
 
-Input names/types are exact; method and class names are case-insensitive. The
-caller selects the namespace. Requests fit the existing single-fragment sender.
+
+def method_request(version: tuple[int, int], causality: UUID, path: str, method: str,
+                   inputs: dict[str, tuple[int, object]], *, outputs=None) -> bytes:
+    """Build op24 for a namespace-relative path, with synchronous outputs.
+
+Without outputs, enforce legacy builtin signatures. Explicit outputs enable typed
+generic calls; input insertion order specifies parameter IDs. Requests must fit
+the existing single-fragment sender.
 """
-    method = _validate_method(path, method, inputs)
+    if outputs is None:
+        method = _validate_method(path, method, inputs)
+    else:
+        from remoteops.commands.wmi_invocation import validate_call
+        validate_call(path, method, inputs, outputs)
     data = orpcthis(version, causality) + wmi_query._bstr(path, 0x20000)
     data += bytes(-len(data) % 4) + wmi_query._bstr(method, 0x20004)
     data += bytes(-len(data) % 4) + bytes(8)  # lFlags=0, pCtx=NULL.
     if inputs:
-        obj = _enum_parameters(inputs)
+        obj = _enum_parameters(inputs) if outputs is None else _parameters(inputs)
         data += struct.pack("<III", 0x20008, len(obj), len(obj)) + obj
         data += bytes(-len(data) % 4)
     else:
@@ -150,7 +193,29 @@ caller selects the namespace. Requests fit the existing single-fragment sender.
     return data
 
 
-def decode_method(data: bytes, properties: dict[str, int]) -> dict:
+def delete_request(version, causality, path):
+    # MS-WMI 3.1.4.3.14: synchronous op16, no context or call-result reference.
+    from remoteops.commands.wmi_invocation import compile_delete
+    compile_delete(path)
+    data = orpcthis(version, causality) + wmi_query._bstr(path, 0x20000)
+    data += bytes(-len(data) % 4) + bytes(12)
+    if len(data) > MAX_REQUEST_BYTES:
+        raise ValueError(f"DeleteInstance request exceeds {MAX_REQUEST_BYTES} bytes")
+    return data
+
+
+def decode_delete(data):
+    reader = Reader(data, limit=MAX_RESPONSE)
+    _orpcthat(reader)
+    if reader.u32():
+        raise RpcProtocolError("DeleteInstance returned an unrequested ppCallResult pointer")
+    status = reader.u32()
+    reader.finish()
+    if status:
+        raise DcomStatusError("IWbemServices.DeleteInstance", status)
+
+
+def decode_method(data: bytes, properties: dict[str, int], *, allow_no_output=False) -> dict:
     """Decode the reply to method_request; ReturnValue is provider data, not HRESULT."""
     reader = Reader(data, limit=MAX_RESPONSE)
     _orpcthat(reader)
@@ -166,7 +231,11 @@ def decode_method(data: bytes, properties: dict[str, int]) -> dict:
             raise RpcProtocolError("Failed ExecMethod returned unexpected output parameters")
         raise DcomStatusError("IWbemServices.ExecMethod", status)
     if obj is None:
-        raise RpcProtocolError("Successful ExecMethod omitted its output parameters")
+        if allow_no_output:
+            return {}
+        # The complete HRESULT-success reply has no object references to release.
+        raise wmi_query.WmiQueryError(
+            "Method returned no output object; outcome unconfirmed; do not automatically retry")
     # A validated by-value envelope has no remote object references to release.
     # A body decode failure leaves the channel usable, but not the method outcome known.
     wmi_query._custom_envelope(obj)

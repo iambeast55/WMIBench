@@ -98,7 +98,7 @@ This sequence supersedes the historical delivery sequence below.
    remain active independently of optional idle health checks. Deadlines are bounded;
    errors require explicit reconnect. No automatic retries. Cleanup uncertainty is
    reported and all local sockets close, including after partial initialization.
-6. **RemoteOps integration - initial sysinfo implemented, live validation deferred.**
+6. **WMIBench integration - initial sysinfo implemented, live validation deferred.**
    Non-Windows clients select `DcomWmiSession`; Windows retains native COM. Only
    built-in `sysinfo` is enabled on Linux, with NTLM, numeric IP, and root/cimv2.
    Other commands fail before credential resolution/network dispatch. Connected
@@ -140,7 +140,7 @@ Protocol references for the application-owned implementation:
 The user has specified **WMI/DCOM only (no SMB)** and **no Impacket**. These constraints
 supersede the optional SMB/Impacket proposals retained below as historical planning.
 
-RemoteOps 0.2.0 has an application-owned WMI adapter using Windows' native COM
+WMIBench 0.2.0 has an application-owned WMI adapter using Windows' native COM
 interfaces through pywin32. It does not invoke Impacket, PowerShell, SMB, or WinRM.
 It supports native queries for sysinfo, disk, services, svc, procs, hotfixes, net,
 shares, users, groups, startup, and uptime. Provider fields can differ from PSRP.
@@ -287,5 +287,5 @@ and document unsupported operations rather than silently introducing another cha
 - [Microsoft: Creating processes remotely through WMI](https://learn.microsoft.com/en-us/windows/win32/wmisdk/creating-processes-remotely)
 - [Fortra: Impacket WMI execution reference, including SMB output retrieval](https://github.com/fortra/impacket/blob/master/examples/wmiexec.py)
 
-The implementation choices above are proposed RemoteOps architecture, not a claim
+The implementation choices above are proposed WMIBench architecture, not a claim
 that the reference tools provide the complete application behavior described here.

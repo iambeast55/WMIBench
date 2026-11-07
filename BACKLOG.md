@@ -1,4 +1,38 @@
-# RemoteOps Backlog
+# WMIBench Backlog
+
+## Credential Management And Console Layout - October 16, 2026
+
+Credentials now supports editing, password replacement/removal, and confirmed
+deletion with host-assignment cleanup. Saved secrets use authenticated encryption
+in SQLite and a local key (Windows DPAPI or Linux owner-only permissions), with
+automatic reuse and legacy keychain migration. Profile/password writes are atomic;
+missing keys or invalid ciphertext fail visibly without overwriting existing data.
+Active profiles cannot be edited/deleted until their hosts are disconnected.
+The host rail is the sole target navigator, with context-menu connect/disconnect
+and edit actions. Horizontal host tabs and duplicate center headings are removed.
+Larger text, explicit theme-contrast library icons, a consolidated terminal toolbar,
+better history column widths, and full-height inspection tables reclaim workspace.
+Service/event details use a separate window; event timestamps display local time
+while raw values remain available. History has resizable list/output panes.
+The new archive is `remoteops-linux-console-fixes-preview.tar.gz`; earlier previews
+are preserved. Local tests/Qt captures only, no live remote or SSH testing.
+
+## Command Forms And Inspection Views - October 16, 2026
+
+Schema-driven argument forms now support builtin and custom commands, typed values,
+choices, bounds, required fields, and safe command-line quoting. Single-host forms
+filter by backend; batch forms retain read-only eligibility and preflight. Accepting
+only inserts the command. Services provides loaded-state filtering, inspection, and
+confirmed restart through the existing execution path, followed by a read-only
+refresh on success. Events provides bounded log/count fetches and local provider,
+ID, level, time, and text filters with full message/raw details. Dedicated views use
+unchanged builtin scripts and frozen prepared commands. Failed refreshes retain old
+records but disable stale service actions; endpoint/profile changes clear results.
+Small-window views scroll without collapsing tables, and light/dark themes are
+covered by offscreen Qt captures. No new protocol methods, standalone service
+start/stop, server-side event filters, or older-event pagination were added.
+The separate package is `remoteops-linux-workspaces-preview.tar.gz`. Verification
+is local fixtures and Qt only; no SSH, live target tests, or remote deployment.
 
 ## Read-Only Multi-Host Execution - September 27, 2026
 

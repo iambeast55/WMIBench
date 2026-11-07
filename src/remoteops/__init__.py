@@ -1,4 +1,4 @@
-"""RemoteOps desktop administration console."""
+"""WMIBench desktop administration console; legacy import namespace."""
 
 __all__ = ["__version__"]
 

@@ -1,6 +1,7 @@
 import unittest
+from types import SimpleNamespace
 
-from remoteops.remoting.session import _format_ps_error_stream, _stringify_ps_output
+from remoteops.remoting.session import _format_ps_error_stream, _stream_record_text, _stringify_ps_output
 
 
 class FakeStreams:
@@ -22,4 +23,8 @@ class PsrpStreamTests(unittest.TestCase):
 
     def test_output_list_is_rendered_as_lines(self) -> None:
         self.assertEqual(_stringify_ps_output(["one", "two"]), "one\ntwo")
+
+    def test_information_record_uses_message_data(self) -> None:
+        record = SimpleNamespace(message_data="Starting inventory", message=None)
+        self.assertEqual(_stream_record_text(record), "Starting inventory")
 

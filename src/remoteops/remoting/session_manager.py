@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import time
+import base64
 from collections.abc import Callable, Iterable
 from concurrent.futures import ThreadPoolExecutor
-from threading import RLock
+from dataclasses import replace
+from pathlib import Path
+from threading import Event, RLock
 
 from remoteops.commands.templates import CommandRegistry, CommandValidationError, prepare_command
 from remoteops.core.credentials import CredentialStore, ResolvedCredential
+from remoteops.core.authentication import portable_kerberos
 from remoteops.core.database import Repository
 from remoteops.core.models import AuthMethod, CommandResult, ConnectionMode, CredentialProfile, Host, SessionState, utc_now
 from remoteops.remoting.session import FakeSession, PersistentSession, PsrpSession, RemoteSessionError
@@ -21,7 +25,7 @@ class SessionManager:
     def __init__(self, repository=None, credential_store=None, session_factory=None,
                  credential_provider=None, max_workers=12):
         self.repository: Repository | None = repository
-        self.credential_store = credential_store or CredentialStore()
+        self.credential_store = credential_store or CredentialStore(repository)
         self.session_factory = session_factory
         self.credential_provider = credential_provider
         self.max_workers = max_workers
@@ -31,6 +35,8 @@ class SessionManager:
         self._activity = {}
         self._lock = RLock()
         self._closed = False
+        self._plugin_cancels = {}
+        self.plugin_progress = None
         self.registry = CommandRegistry(repository.db_path.parent / "commands.json") if repository else None
 
     def _submit(self, host_id, fn, *, activity=True):
@@ -100,11 +106,13 @@ class SessionManager:
             raise CommandValidationError(f"'{command.alias}' is not available over WMI/DCOM only. Use a native WMI command or a WinRM host.")
         if host and host.connection_mode is ConnectionMode.WMI and not command.help_text:
             from remoteops.remoting.wmi import supported_wmi_aliases
-            if command.wmi_plan is None and command.alias not in supported_wmi_aliases():
+            if command.plugin is None and command.wmi_plan is None and command.alias not in supported_wmi_aliases():
                 raise CommandValidationError(
                     f"'{command.alias}' has no implemented WMI command handler."
                 )
-        if host and host.connection_mode is ConnectionMode.WINRM and not command.help_text and not command.script.strip():
+        if host and command.plugin is not None and not command.help_text and host.connection_mode.value not in command.plugin.backends:
+            raise CommandValidationError("This Python command does not support the selected backend")
+        if host and host.connection_mode is ConnectionMode.WINRM and not command.help_text and not command.script.strip() and command.plugin is None:
             raise CommandValidationError(f"'{command.alias}' has no WinRM implementation. Select a WMI host.")
         return command
 
@@ -121,19 +129,31 @@ class SessionManager:
         return self._run_prepared(host, prepared, profile, credential, timeout_seconds)
 
     def run_prepared_read_only(self, host, prepared, profile=None, credential=None,
-                               timeout_seconds=120, *, allow_connect=False):
-        if prepared.help_text or host.connection_mode.value not in prepared.read_only_modes:
+                               timeout_seconds=120, *, allow_connect=False, approve_python=False):
+        python_allowed = (approve_python and prepared.plugin is not None and not prepared.plugin.modifies
+                          and host.connection_mode.value in prepared.plugin.backends)
+        if prepared.help_text or (host.connection_mode.value not in prepared.read_only_modes and not python_allowed):
             raise CommandValidationError("Multi-host execution only supports verified read-only commands for this backend")
         return self._run_prepared(host, prepared, profile, credential, timeout_seconds,
                                   allow_connect=allow_connect)
 
-    def _run_prepared(self, host, prepared, profile, credential, timeout_seconds, *, allow_connect=True):
+    def run_prepared_with_credential(self, host, prepared, profile=None, credential=None, timeout_seconds=120, *, cancel=None):
+        """Run an already validated command snapshot without reloading its definition."""
+        if prepared.help_text:
+            return CommandResult(host.id, host.name, "", stdout=prepared.help_text,
+                                 exit_code=0, command_line=prepared.command_line)
+        return self._run_prepared(host, prepared, profile or self._profile_for_host(host), credential, timeout_seconds,
+                                  plugin_cancel=cancel)
+
+    def _run_prepared(self, host, prepared, profile, credential, timeout_seconds, *, allow_connect=True, plugin_cancel=None):
         command = prepared.command_line
 
         def run():
             result = CommandResult(host.id, host.name, prepared.script, command_line=command,
                                    connection_mode=host.connection_mode.value)
             try:
+                if plugin_cancel is not None and plugin_cancel.is_set():
+                    raise RemoteSessionError("Python command cancelled before dispatch; no connection attempted")
                 key = self._key(host, profile)
                 previous = self._sessions.get(key)
                 if previous and previous.state is SessionState.ERROR:
@@ -141,7 +161,10 @@ class SessionManager:
                 if not allow_connect and (previous is None or previous.state is not SessionState.CONNECTED):
                     raise RemoteSessionError("The existing session is no longer connected. No new connection was authorized.")
                 session = self._connect(host, profile, credential)
-                result = session.run_prepared(prepared, timeout_seconds)
+                if prepared.plugin is not None:
+                    result = self._run_plugin(session, prepared, timeout_seconds, plugin_cancel)
+                else:
+                    result = self._run_with_module(session, prepared, timeout_seconds)
             except Exception as exc:
                 result.stderr = str(exc)
                 result.exit_code = 1
@@ -152,6 +175,127 @@ class SessionManager:
                 self.repository.save_command_result(result)
             return result
         return self._submit(host.id, run).result()
+
+    @staticmethod
+    def _run_with_module(session, prepared, timeout_seconds):
+        if not prepared.module_path:
+            return session.run_prepared(prepared, timeout_seconds)
+        if not isinstance(session, PsrpSession):
+            raise RemoteSessionError("Local PowerShell modules require a WinRM session")
+        local_path = Path(prepared.module_path).expanduser()
+        if not local_path.is_file():
+            raise RemoteSessionError(f"Local PowerShell module was not found: {local_path}")
+        if local_path.suffix.lower() != ".psm1":
+            raise RemoteSessionError("Select a PowerShell script module with a .psm1 extension")
+
+        try:
+            raw = local_path.read_bytes()
+            encoding = "utf-16" if raw.startswith((b"\xff\xfe", b"\xfe\xff")) else "utf-8-sig"
+            source = raw.decode(encoding)
+        except UnicodeDecodeError as exc:
+            raise RemoteSessionError("Local PowerShell module must be UTF-8 or UTF-16 text") from exc
+        encoded = base64.b64encode(source.encode("utf-8")).decode("ascii")
+        wrapped = (
+            "$__wmibench_local_source = "
+            f"[Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{encoded}'))\n"
+            "Invoke-Expression $__wmibench_local_source\n"
+            + prepared.script
+        )
+        return session.run_prepared(replace(prepared, script=wrapped, module_path=""), timeout_seconds)
+
+    def cancel_plugin(self, host_id):
+        with self._lock:
+            cancel = self._plugin_cancels.get(host_id)
+            if cancel is not None:
+                cancel.set()
+            return cancel is not None
+
+    def _run_plugin(self, session, prepared, timeout, cancel=None):
+        from remoteops.commands.plugin_api import PluginContext, PluginError, execute_plugin
+        from remoteops.commands.templates import PreparedCommand
+        from remoteops.remoting.output import records_text
+        snapshot = prepared.plugin
+        mode = session.host.connection_mode.value
+        if mode not in snapshot.backends:
+            raise CommandValidationError("This Python command does not support the selected backend")
+        result = CommandResult(session.host.id, session.host.name,
+                               f"Python {prepared.alias} @ {snapshot.digest}")
+        method_audit = []
+        cancel = cancel if cancel is not None else Event()
+        with self._lock:
+            self._plugin_cancels[session.host.id] = cancel
+
+        def remote(command, budget):
+            if session.state is SessionState.ERROR:
+                raise PluginError("The transport is unavailable; reconnect explicitly")
+            session.state = SessionState.CONNECTED
+            try:
+                response = session.run_prepared(command, budget)
+                if not response.succeeded:
+                    raise PluginError(response.stderr or "Remote operation failed")
+                return response
+            finally:
+                if session.state is SessionState.CONNECTED:
+                    session.state = SessionState.RUNNING
+
+        def query(plan, budget):
+            command = PreparedCommand(prepared.command_line, prepared.alias, prepared.name, "", {},
+                                      native_wmi=True, wmi_plan=plan)
+            return remote(command, budget).records
+
+        def powershell(script, budget):
+            command = PreparedCommand(prepared.command_line, prepared.alias, prepared.name, script, {})
+            response = remote(command, budget)
+            return {"records": response.records, "stdout": response.stdout}
+
+        def invoke(plan, budget):
+            command = PreparedCommand(prepared.command_line, prepared.alias, prepared.name, "", {},
+                                      native_wmi=True, method_plan=plan)
+            label = f"{plan.namespace}: {plan.path}.{plan.method}"
+            method_audit.append(label + " attempted; outcome not yet confirmed")
+            response = remote(command, budget)
+            if len(response.records) != 1:
+                raise PluginError("Method output missing; outcome unconfirmed; do not automatically retry")
+            output = response.records[0]
+            code = f"; ReturnValue={output['ReturnValue']!r}" if "ReturnValue" in output else ""
+            method_audit[-1] = label + " returned" + code
+            if output == {} and plan.allow_no_output:
+                method_audit[-1] = label + " completed without output; provider ReturnValue unavailable"
+            return output
+
+        def progress(message):
+            if self.plugin_progress is not None:
+                self.plugin_progress(session.host.id, message)
+
+        def delete_instance(plan, budget):
+            command = PreparedCommand(prepared.command_line, prepared.alias, prepared.name, "", {},
+                                      native_wmi=True, delete_plan=plan)
+            label = f"{plan.namespace}: DeleteInstance {plan.path}"
+            method_audit.append(label + " attempted; outcome not yet confirmed")
+            remote(command, budget)
+            method_audit[-1] = label + " completed; HRESULT=0"
+            return {"Deleted": True, "Path": plan.path}
+
+        context = PluginContext(backend=mode, query=query, powershell=powershell,
+                                timeout_seconds=min(timeout, 120), cancel=cancel, progress=progress,
+                                invoke=invoke, delete_instance=delete_instance, modifies_remote=snapshot.modifies)
+        session.state = SessionState.RUNNING
+        try:
+            result.records = execute_plugin(snapshot, context, prepared.values)
+            result.stdout = records_text(result.records)
+            result.exit_code = 0
+        except Exception as exc:
+            result.stderr = str(exc)
+            result.exit_code = 1
+        finally:
+            if method_audit:
+                result.command += "\n" + "\n".join(method_audit)
+            with self._lock:
+                self._plugin_cancels.pop(session.host.id, None)
+            if session.state is SessionState.RUNNING:
+                session.state = SessionState.CONNECTED
+            result.completed_at = utc_now()
+        return result
 
     def session_state(self, host, profile=None):
         with self._lock:
@@ -256,6 +400,50 @@ class SessionManager:
                     session.state = SessionState.CONNECTED
         return self._submit(host.id, perform).result()
 
+    def run_tool(self, host, action, args, cancel=None, *, record_history=True):
+        """Never connect or retry implicitly, including when an operation was queued."""
+        import json
+        from remoteops.remoting.tools import context_for_session, perform, run_script
+        from remoteops.remoting.output import records_text
+
+        def run():
+            result = CommandResult(host.id, host.name, f"Tool: {action}\n" + json.dumps(args), command_line=f"tools {action}",
+                                   connection_mode=host.connection_mode.value)
+            audit = []
+            session = self._sessions.get(self._key(host, self._profile_for_host(host)))
+            try:
+                if cancel is not None and cancel.is_set():
+                    raise ValueError("Cancelled before dispatch.")
+                if session is None or session.state is not SessionState.CONNECTED:
+                    raise RemoteSessionError("Connect this host before using its tools.")
+                if action.startswith("explorer-"):
+                    from remoteops.remoting.explorer import perform as explore
+                    result.records = explore(session, action.removeprefix("explorer-"), dict(args), cancel)
+                    result.stdout = records_text(result.records)
+                    result.exit_code = 0
+                elif action == "runner":
+                    if host.connection_mode is not ConnectionMode.WINRM:
+                        raise ValueError("PowerShell output capture requires WinRM.")
+                    script = args.get("command", "")
+                    if not isinstance(script, str) or not script.strip() or len(script) > 100000:
+                        raise ValueError("Enter a PowerShell script of at most 100,000 characters.")
+                    result = run_script(session, script, cancel)
+                else:
+                    result.records = perform(context_for_session(session, cancel, audit), action, dict(args))
+                    result.stdout = records_text(result.records)
+                    result.exit_code = 0
+            except Exception as exc:
+                result.stderr = str(exc)
+                result.exit_code = 1
+            result.command += ("\n" + "\n".join(audit)) if audit else ""
+            result.command_line = f"tools {action}"
+            result.connection_mode = host.connection_mode.value
+            result.completed_at = result.completed_at or utc_now()
+            if self.repository and (record_history or not result.succeeded):
+                self.repository.save_command_result(result)
+            return result
+        return self._submit(host.id, run).result()
+
     def use_fake_backend(self):
         self.session_factory = FakeSession
 
@@ -266,6 +454,6 @@ class SessionManager:
         if profile is None:
             return None
         credential = self.credential_store.resolve(profile)
-        if credential.secret or profile.method not in {AuthMethod.NTLM, AuthMethod.BASIC}:
+        if credential.secret or (profile.method not in {AuthMethod.NTLM, AuthMethod.NTLM_HASH, AuthMethod.BASIC} and not portable_kerberos(profile)):
             return credential
         return self.credential_provider(profile) if self.credential_provider else credential

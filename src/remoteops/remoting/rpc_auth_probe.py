@@ -250,7 +250,9 @@ def _new_context(username: str, password: str, address: str):
     if not 3 <= compatibility <= 5:
         raise RpcSecurityError("LM_COMPAT_LEVEL must be 3..5; NTLMv1/LM are not allowed")
     return spnego.client(
-        username=username, password=password, hostname=address, service="host", protocol="ntlm",
+        username=password if isinstance(password, spnego.NTLMHash) else username,
+        password=None if isinstance(password, spnego.NTLMHash) else password,
+        hostname=address, service="host", protocol="ntlm",
         context_req=spnego.ContextReq.integrity | spnego.ContextReq.confidentiality |
                     spnego.ContextReq.replay_detect | spnego.ContextReq.sequence_detect,
         options=spnego.NegotiateOptions.use_ntlm,

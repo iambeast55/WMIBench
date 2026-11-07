@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-APP_NAME="RemoteOps"
-APP_ID="remoteops"
-INSTALL_DIR="${REMOTEOPS_INSTALL_DIR:-$HOME/.local/share/remoteops}"
-BIN_DIR="${REMOTEOPS_BIN_DIR:-$HOME/.local/bin}"
+APP_NAME="WMIBench"
+# Retain the install location and desktop ID for in-place upgrades.
+INSTALL_DIR="${WMIBENCH_INSTALL_DIR:-${REMOTEOPS_INSTALL_DIR:-$HOME/.local/share/remoteops}}"
+BIN_DIR="${WMIBENCH_BIN_DIR:-${REMOTEOPS_BIN_DIR:-$HOME/.local/bin}}"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
@@ -50,18 +50,20 @@ python3 -m venv "$INSTALL_DIR/.venv"
 "$INSTALL_DIR/.venv/bin/python" -m pip install --upgrade pip
 "$INSTALL_DIR/.venv/bin/python" -m pip install "$INSTALL_DIR"
 
-cat > "$BIN_DIR/remoteops" <<EOF
+cat > "$BIN_DIR/wmibench" <<EOF
 #!/usr/bin/env bash
-exec "$INSTALL_DIR/.venv/bin/python" -m remoteops "\$@"
+exec "$INSTALL_DIR/.venv/bin/python" -m wmibench "\$@"
 EOF
+chmod +x "$BIN_DIR/wmibench"
+cp "$BIN_DIR/wmibench" "$BIN_DIR/remoteops"
 chmod +x "$BIN_DIR/remoteops"
 
 cat > "$APPLICATIONS_DIR/remoteops.desktop" <<EOF
 [Desktop Entry]
 Type=Application
-Name=RemoteOps
-Comment=Persistent WinRM/PSRP administration console
-Exec=$BIN_DIR/remoteops
+Name=WMIBench
+Comment=Windows administration over WMI/DCOM and WinRM
+Exec=$BIN_DIR/wmibench
 Terminal=false
 Categories=System;Network;RemoteAccess;
 StartupNotify=true
@@ -73,7 +75,7 @@ fi
 
 echo
 echo "$APP_NAME installed."
-echo "Run it with: remoteops"
+echo "Run it with: wmibench"
 echo
 if [[ ":$PATH:" != *":$BIN_DIR:"* ]]; then
   echo "Note: $BIN_DIR is not currently on PATH."

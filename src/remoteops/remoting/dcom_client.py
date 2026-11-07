@@ -33,8 +33,6 @@ from remoteops.remoting.wmi_query import (
 PING_INTERVAL = 60
 MAX_QUERY_SECONDS = 60
 MAX_QUERY_BYTES = 32 * 1024 * 1024
-SUPPORTED_NAMESPACES = frozenset({"root\\cimv2", "root\\default", "root\\standardcimv2",
-                                  "root\\microsoft\\windows\\taskscheduler"})
 
 
 def _error_text(exc):
@@ -66,6 +64,7 @@ class DcomClient:
         self.closed = False
         self.ready = False
         self.causality = uuid4()
+        self.authentication = 10
 
     def _thread(self):
         if get_ident() != self.owner:
@@ -80,7 +79,7 @@ class DcomClient:
             raise RpcProtocolError("Cross-exporter WMI references are not supported")
         self.references.append(reference)
         if not reference.flags & 0x1000:
-            reference.resolver_bindings.require_ntlm()
+            reference.resolver_bindings.require_authentication(self.authentication)
         # Only the approved host's endpoint mapper is supported as object resolver.
         for protocol, binding in reference.resolver_bindings.strings:
             if protocol != 7:
@@ -94,41 +93,42 @@ class DcomClient:
             raise RpcProtocolError("Pingable WMI reference omitted its TCP resolver binding")
 
     def connect(self, address, username, password, namespace="root/cimv2", timeout=30,
-                *, probe_os=True):
+                *, probe_os=True, ticket_provider=None):
         self._thread()
         if self.closed or self.activation is not None:
             raise RpcProbeError("Create a new WMI client for each explicit connection")
         ip = rpc.validate_target(address, username, password, 135, timeout)
         namespace = normalize_namespace(namespace)
-        if namespace.casefold() not in SUPPORTED_NAMESPACES:
-            raise ValueError("Unsupported WMI command namespace")
         if probe_os and namespace.casefold() != "root\\cimv2":
             raise ValueError("Initial WMI sessions require namespace root/cimv2")
         self.namespace = namespace.casefold()
         address = str(ip)
         self.resolver_port = 135
         deadline = time.monotonic() + timeout
+        self.authentication = 16 if ticket_provider is not None else 10
+
+        def channel_for(interface, port):
+            if ticket_provider is not None:
+                from remoteops.remoting.kerberos_rpc import connection
+                return connection(ticket_provider, interface, port, deadline)
+            return rpc.ntlm_connection(address, username, password, interface, port, deadline)
 
         def open_channel(interface, port):
-            self.channels[interface] = self.stack.enter_context(rpc.ntlm_connection(
-                address, username, password, interface, port, deadline
-            ))
+            self.channels[interface] = self.stack.enter_context(channel_for(interface, port))
 
         try:
             version = discover_version(address, 135, deadline)
-            with rpc.ntlm_connection(address, username, password, ACTIVATION, 135, deadline) as channel:
+            with channel_for(ACTIVATION, 135) as channel:
                 self.uncertain.append("activation reference cleanup unconfirmed")
                 self.activation = decode_activation(channel.call(
                     0, activation_request(version, self.causality), deadline
                 ))
                 self.uncertain.pop()
             self.references.append(self.activation.reference)
-            self.activation.bindings.require_ntlm()
+            self.activation.bindings.require_authentication(self.authentication)
             port = self.activation.bindings.tcp_port()
             open_channel(REM_UNKNOWN, port)
-            with rpc.ntlm_connection(
-                address, username, password, WBEM_LOGIN_INTERFACE, port, deadline
-            ) as channel:
+            with channel_for(WBEM_LOGIN_INTERFACE, port) as channel:
                 self.uncertain.append("namespace reference cleanup unconfirmed")
                 reply = channel.call(6, namespace_login_request(
                     self.activation.version, self.causality, namespace
@@ -284,21 +284,23 @@ class DcomClient:
         except (Exception, KeyboardInterrupt) as exc:
             self._fail(exc)
 
-    def invoke(self, path, method, inputs, timeout_seconds=60):
+    def invoke(self, path, method, inputs, timeout_seconds=60, *, outputs=None, allow_no_output=False):
         from remoteops.remoting.wmi_methods import method_request, decode_method
 
         self._thread()
+        if type(allow_no_output) is not bool or (allow_no_output and outputs is None):
+            raise ValueError("allow_no_output requires a boolean and an explicit output schema")
         if not self.ready or self.closed:
             raise RpcProbeError("WMI session is not connected; reconnect explicitly")
         if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
             raise ValueError("WMI method timeout must be positive and finite")
-        if method.casefold() in ("startservice", "stopservice") and self.namespace != "root\\cimv2":
+        if outputs is None and method.casefold() in ("startservice", "stopservice") and self.namespace != "root\\cimv2":
             raise ValueError("Service operations require root/cimv2")
-        if method.casefold() == "enumkey" and self.namespace not in ("root\\default", "root\\cimv2"):
+        if outputs is None and method.casefold() == "enumkey" and self.namespace not in ("root\\default", "root\\cimv2"):
             raise ValueError("Registry operations require root/default or root/cimv2")
-        request = method_request(self.activation.version, self.causality, path, method, inputs)
-        properties = {"ReturnValue": 19}
-        if method.casefold() == "enumkey":
+        request = method_request(self.activation.version, self.causality, path, method, inputs, outputs=outputs)
+        properties = dict(outputs) if outputs is not None else {"ReturnValue": 19}
+        if outputs is None and method.casefold() == "enumkey":
             properties["sNames"] = 0x2008
         deadline = time.monotonic() + min(timeout_seconds, MAX_QUERY_SECONDS)
         try:
@@ -306,7 +308,7 @@ class DcomClient:
             self.uncertain.append(f"{method} outcome unconfirmed; do not automatically retry")
             reply = self._call(WBEM_SERVICES_INTERFACE, 24, request, deadline, self.services.ipid)
             try:
-                result = decode_method(reply, properties)
+                result = decode_method(reply, properties, allow_no_output=allow_no_output)
             except DcomStatusError as exc:
                 self.uncertain.pop()
                 raise WmiQueryError(str(exc)) from exc
@@ -315,6 +317,31 @@ class DcomClient:
                 raise
             self.uncertain.pop()
             return result
+        except WmiQueryError:
+            raise
+        except (Exception, KeyboardInterrupt) as exc:
+            self._fail(exc)
+
+    def delete_instance(self, path, timeout_seconds=60):
+        from remoteops.remoting.wmi_methods import delete_request, decode_delete
+        self._thread()
+        if not self.ready or self.closed:
+            raise RpcProbeError("WMI session is not connected; reconnect explicitly")
+        if not math.isfinite(timeout_seconds) or timeout_seconds <= 0:
+            raise ValueError("WMI method timeout must be positive and finite")
+        request = delete_request(self.activation.version, self.causality, path)
+        deadline = time.monotonic() + min(timeout_seconds, MAX_QUERY_SECONDS)
+        try:
+            self._sync_ping(deadline)
+            self.uncertain.append("DeleteInstance outcome unconfirmed; do not automatically retry")
+            reply = self._call(WBEM_SERVICES_INTERFACE, 16, request, deadline, self.services.ipid)
+            try:
+                decode_delete(reply)
+            except DcomStatusError as exc:
+                self.uncertain.pop()
+                raise WmiQueryError(str(exc)) from exc
+            self.uncertain.pop()
+            return {"Deleted": True, "Path": path}
         except WmiQueryError:
             raise
         except (Exception, KeyboardInterrupt) as exc:

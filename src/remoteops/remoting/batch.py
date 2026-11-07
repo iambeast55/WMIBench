@@ -22,6 +22,7 @@ class BatchTarget:
     credential: ResolvedCredential | None = field(default=None, repr=False)
     allow_connect: bool = False
     skip_reason: str = ""
+    approve_python: bool = False
 
 
 @dataclass(frozen=True)
@@ -66,8 +67,10 @@ class BatchRunner:
             for target in self.targets:
                 command = target.command
                 reason = target.skip_reason
+                python_allowed = (command is not None and command.plugin is not None and target.approve_python
+                                  and not command.plugin.modifies and target.host.connection_mode.value in command.plugin.backends)
                 if not reason and (command is None or command.help_text
-                                   or target.host.connection_mode.value not in command.read_only_modes):
+                                   or (target.host.connection_mode.value not in command.read_only_modes and not python_allowed)):
                     reason = "This command is not verified read-only for this backend."
                 if reason:
                     publish(BatchUpdate(target.host.id, "Skipped", detail=reason))
@@ -104,9 +107,10 @@ class BatchRunner:
     def _run_one(self, target):
         started = utc_now()
         try:
+            options = {"approve_python": True} if target.approve_python else {}
             result = self.manager.run_prepared_read_only(
                 target.host, target.command, target.profile, target.credential,
-                allow_connect=target.allow_connect,
+                allow_connect=target.allow_connect, **options,
             )
         except Exception as exc:
             result = CommandResult(

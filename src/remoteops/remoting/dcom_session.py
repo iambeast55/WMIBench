@@ -6,6 +6,7 @@ import time
 from remoteops.commands.wmi_catalog import WMI_ALIASES, WmiCommandError, execute_command
 from remoteops.commands.wmi_definitions import execute_query_plan
 from remoteops.core.models import AuthMethod, CommandResult, SessionState, utc_now
+from remoteops.core.authentication import ntlm_identity, portable_kerberos
 from remoteops.remoting.dcom_client import DcomClient
 from remoteops.remoting.rpc_probe import _remaining
 from remoteops.remoting.output import records_text
@@ -21,20 +22,30 @@ class DcomWmiSession(PersistentSession):
         self.client = None
         self.namespace_clients = {}
         self.identity = None
+        self.address = host.address
+        self.ticket_provider = None
 
     def connect(self, credential=None):
         if self.client is not None:
             raise RemoteSessionError("Disconnect the existing WMI session before reconnecting")
         self.state = SessionState.CONNECTING
         try:
-            if self.profile is None or self.profile.method is not AuthMethod.NTLM:
+            kerberos = portable_kerberos(self.profile)
+            if not kerberos and (self.profile is None or self.profile.method not in (AuthMethod.NTLM, AuthMethod.NTLM_HASH)):
                 raise RemoteSessionError("Experimental Linux WMI requires an NTLM profile; Kerberos is not implemented")
             username = credential.username if credential else self.profile.username
             password = credential.secret if credential else None
             if not username or not password:
                 raise RemoteSessionError("Experimental Linux WMI requires an explicit username and password")
+            if self.profile.method is AuthMethod.NTLM_HASH:
+                password = ntlm_identity(username, password, self.profile.method)
+            if kerberos:
+                from remoteops.remoting.kerberos import TicketProvider
+                self.ticket_provider = TicketProvider(self.host, self.profile, credential)
+                self.address = self.ticket_provider.address
             self.client = self.client_factory()
-            self.client.connect(self.host.address, username, password, self.host.wmi_namespace)
+            options = {"ticket_provider": self.ticket_provider} if kerberos else {}
+            self.client.connect(self.address, username, password, self.host.wmi_namespace, **options)
             self.namespace_clients["root/cimv2"] = self.client
             self.identity = (username, password)
             self.state = SessionState.CONNECTED
@@ -49,7 +60,7 @@ class DcomWmiSession(PersistentSession):
         raise RemoteSessionError("WMI only accepts validated native command operations")
 
     def run_prepared(self, command, timeout_seconds=120):
-        if not command.native_wmi or (command.wmi_plan is None and command.alias not in WMI_ALIASES):
+        if not command.native_wmi or (command.delete_plan is None and command.method_plan is None and command.wmi_plan is None and command.alias not in WMI_ALIASES):
             raise RemoteSessionError("This command has no native WMI implementation")
         if self.state is not SessionState.CONNECTED or self.client is None:
             raise RemoteSessionError("WMI session is not connected; reconnect explicitly")
@@ -67,15 +78,30 @@ class DcomWmiSession(PersistentSession):
                 return self._operation(client, lambda: client.query_os(remaining))
             return self._operation(client, lambda: client.query(spec, remaining))
 
-        def method(namespace, path, name, inputs, timeout):
+        def method(namespace, path, name, inputs, timeout, outputs=None, allow_no_output=False):
             actions.append(f"{namespace}: {path}.{name}({inputs!r})")
             deadline = time.monotonic() + timeout
             client = self._namespace_client(namespace, timeout)
             remaining = _remaining(deadline)
-            return self._operation(client, lambda: client.invoke(path, name, inputs, remaining))
+            options = {"outputs": outputs} if outputs is not None else {}
+            if allow_no_output:
+                options["allow_no_output"] = True
+            return self._operation(client, lambda: client.invoke(path, name, inputs, remaining, **options))
 
         try:
-            if command.wmi_plan is not None:
+            if command.delete_plan is not None:
+                plan = command.delete_plan
+                budget = min(timeout_seconds, plan.timeout_seconds)
+                deadline = time.monotonic() + budget
+                client = self._namespace_client(plan.namespace, budget)
+                actions.append(f"{plan.namespace}: DeleteInstance {plan.path}")
+                budget = _remaining(deadline)
+                result.records = [self._operation(client, lambda: client.delete_instance(plan.path, budget))]
+            elif command.method_plan is not None:
+                plan = command.method_plan
+                result.records = [method(plan.namespace, plan.path, plan.method, plan.inputs,
+                                         min(timeout_seconds, plan.timeout_seconds), plan.outputs, plan.allow_no_output)]
+            elif command.wmi_plan is not None:
                 result.records = execute_query_plan(command.wmi_plan, query, min(timeout_seconds, 60))
             else:
                 result.records, _ = execute_command(command.alias, command.values, query, method,
@@ -128,13 +154,16 @@ class DcomWmiSession(PersistentSession):
         key = namespace.replace("\\", "/").casefold()
         if key in self.namespace_clients:
             return self.namespace_clients[key]
+        if len(self.namespace_clients) >= 16:
+            raise WmiCommandError("WMI namespace limit reached (16 cached namespaces); existing sessions retained")
         if self.identity is None:
             raise RemoteSessionError("WMI session identity is unavailable; reconnect explicitly")
         client = self.client_factory()
         # Register before connecting so failure cleanup also covers partial sessions.
         self.namespace_clients[key] = client
         try:
-            client.connect(self.host.address, *self.identity, key, timeout=min(timeout, 30), probe_os=False)
+            options = {"ticket_provider": self.ticket_provider} if self.ticket_provider else {}
+            client.connect(self.address, *self.identity, key, timeout=min(timeout, 30), probe_os=False, **options)
         except Exception as exc:
             self.namespace_clients.pop(key)
             detail = str(exc)
@@ -196,6 +225,9 @@ class DcomWmiSession(PersistentSession):
                 client.close()
             except Exception as exc:
                 failures.append(str(exc))
+        if self.ticket_provider:
+            self.ticket_provider.close()
+            self.ticket_provider = None
         if failures:
             raise RemoteSessionError("; ".join(failures))
 

@@ -27,7 +27,10 @@ class ConnectionMode(StrEnum):
 
 class AuthMethod(StrEnum):
     KERBEROS = "kerberos"
+    KERBEROS_RC4 = "kerberos_rc4"
+    KERBEROS_AES = "kerberos_aes"
     NTLM = "ntlm"
+    NTLM_HASH = "ntlm_hash"
     BASIC = "basic"
 
 
@@ -57,6 +60,8 @@ class Host:
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
 
+    kerberos_hostname: str = ""
+
     @property
     def endpoint(self) -> str:
         if self.connection_mode is ConnectionMode.WMI:
@@ -73,6 +78,9 @@ class CredentialProfile:
     prompt_for_secret: bool = True
     created_at: datetime = field(default_factory=utc_now)
     updated_at: datetime = field(default_factory=utc_now)
+    domain: str = ""
+    domain_controller: str = ""
+    dns_server: str = ""
 
 
 @dataclass(slots=True)
@@ -86,6 +94,8 @@ class CommandTemplate:
     wmi: dict[str, Any] | None = None
     category: str = ""
     favorite: bool = False
+    plugin: Any = None
+    module_path: str = ""
 
 
 @dataclass(slots=True)

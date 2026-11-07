@@ -1,0 +1,15 @@
+.venv/
+__pycache__/
+**/__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+build/
+
+# Keep the final portable bundle; exclude any other generated distribution output.
+dist/*
+!dist/WMIBench-windows-x86_64/
+!dist/WMIBench-windows-x86_64/**
+
+*.log
+*.tmp

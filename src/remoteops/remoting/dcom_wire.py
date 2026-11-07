@@ -85,8 +85,12 @@ class Bindings:
         raise RpcProtocolError("DCOM returned no supported TCP endpoint; no fallback attempted")
 
     def require_ntlm(self):
-        if not any(service == 10 for service, _, _ in self.security):
-            raise RpcProtocolError("DCOM did not advertise NTLM; no authentication fallback attempted")
+        self.require_authentication(10)
+
+    def require_authentication(self, authentication):
+        if not any(service == authentication for service, _, _ in self.security):
+            name = "NTLM" if authentication == 10 else "Kerberos"
+            raise RpcProtocolError(f"DCOM did not advertise {name}; no authentication fallback attempted")
 
 
 def _binding_string(units: tuple[int, ...], start: int, end: int):

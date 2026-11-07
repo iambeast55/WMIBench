@@ -1,7 +1,8 @@
 # Adding WMI Commands
 
-There are now two extension paths: add a read-only query in the Command Library
-without Python edits, or extend the source-defined catalog/backend for a new
+There are three extension paths: add a read-only query in the Command Library,
+install a trusted [Python command](PYTHON_COMMANDS.md) for custom logic without
+rebuilding, or extend the source-defined catalog/backend for a new transport
 capability. Custom definitions run through the same Windows/Linux WMI sessions,
 tables, history, and error handling as built-in commands. Saving never contacts a host.
 
@@ -41,22 +42,26 @@ Search matches aliases, names, descriptions, definitions, and categories. Catego
 backend, and Favorites filters combine. Check the Favorite column to save a
 favorite; favorites sort first, followed by category and alias. Edit Category to
 group your own commands. Existing builtins receive default categories without reset.
-The Browse commands icon beside a host's command input opens the same library with
-that host's backend selected. Insert command fills the input; it never executes.
-Add arguments and press Run when ready. Incompatible commands cannot be inserted
-even when the backend filter is changed to All backends.
+Open the top-level Commands library to manage commands. Type aliases and arguments
+directly into the terminal; use `ALIAS -h` for options and examples. The parser checks
+`_schema` types, choices, defaults, required flags and numeric bounds locally.
+There is no separate command-arguments form or terminal command-browser button.
 
-Plain-language failures include whether the session is usable. The warning icon
-in each terminal opens Latest error details with a Copy details action. Command
-History keeps original stderr for earlier command failures. Only the latest
-connection/worker diagnostic is retained by the details button.
+Plain-language failures include whether the session is usable. Full diagnostics
+appear directly in the terminal and can be selected/copied. Command History keeps
+original stderr for earlier failures; no Latest error button is needed.
 
 ### Supported Definition Options
 
 The library envelope is `{"version": 2, "commands": [...]}`. Each command has
 `name`, `alias`, optional `description`, `parameters`, and at least one of `script`
 or `wmi`. Optional `category` is text of at most 80 characters; `favorite` is a JSON
-boolean. Both survive export/import/duplication. Older builds with strict schemas
+boolean. A PowerShell command may also set `module_path` to a local `.ps1` or
+`.psm1` file. WMIBench sends that script source through WinRM and runs it in the
+persistent session scope before the command script; it never writes the file to
+the remote disk. Leave `script` blank to load the local script without invoking a
+second command. The module path belongs to the WMIBench client and is not portable
+across clients. These fields survive export/import/duplication. Older builds with strict schemas
 cannot read these new metadata fields; keep a library backup before downgrading.
 A WMI definition accepts only:
 
@@ -306,14 +311,14 @@ From the repository root on Windows:
 ```powershell
 $env:PYTHONPATH = 'src'
 .\.venv\Scripts\python.exe -m unittest discover -s tests -q
-.\packaging\linux\build_tarball.ps1 -PackageName remoteops-linux-multihost-preview
+.\packaging\linux\build_tarball.ps1 -PackageName remoteops-linux-console-fixes-preview
 ```
 
-On Ubuntu, close RemoteOps and extract outside the install directory:
+On Ubuntu, close WMIBench and extract outside the install directory:
 
 ```bash
-tar -xzf remoteops-linux-multihost-preview.tar.gz
-cd remoteops-linux-multihost-preview
+tar -xzf remoteops-linux-console-fixes-preview.tar.gz
+cd remoteops-linux-console-fixes-preview
 bash packaging/linux/install.sh
 ~/.local/bin/remoteops
 ```

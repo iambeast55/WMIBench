@@ -57,20 +57,25 @@ def _literal(value, kind):
     return wql_literal(value)
 
 
-def validate_definition(definition, schema):
+def validate_definition(definition, schema, *, extended=False):
     _keys(definition, {"operation", "namespace", "class", "properties", "filters", "limits", "columns"}, "WMI definition")
     if definition.get("operation") != "query":
         raise ValueError("Custom WMI definitions support operation 'query' only")
     namespace = definition.get("namespace", "root/cimv2")
-    if not isinstance(namespace, str) or namespace.replace("\\", "/").casefold() != "root/cimv2":
+    if extended:
+        QuerySpec(namespace, "Example", {"Value": 8})
+        if len(namespace) > 256:
+            raise ValueError("WMI namespace exceeds 256 characters")
+    elif not isinstance(namespace, str) or namespace.replace("\\", "/").casefold() != "root/cimv2":
         raise ValueError("Custom WMI queries currently require namespace root/cimv2")
     _name(definition.get("class"))
     properties = definition.get("properties")
     if not isinstance(properties, dict) or not 1 <= len(properties) <= 64:
         raise ValueError("WMI properties must map 1..64 property names to CIM type names")
+    types = {**CIM_TYPES, **{name + "[]": kind | 0x2000 for name, kind in CIM_TYPES.items()}} if extended else CIM_TYPES
     for name, kind in properties.items():
         _name(name)
-        if not isinstance(kind, str) or kind not in CIM_TYPES:
+        if not isinstance(kind, str) or kind not in types:
             raise ValueError(f"Unsupported CIM type for {name}: {kind!r}")
     if len({name.casefold() for name in properties}) != len(properties):
         raise ValueError("Duplicate WMI property names")
@@ -102,6 +107,8 @@ def validate_definition(definition, schema):
         if len(sources) != 1:
             raise ValueError("A comparison requires exactly one parameter or literal value")
         kind = properties[name]
+        if kind.endswith("[]"):
+            raise ValueError("Array filter properties support is_null/not_null only")
         if kind == "boolean" and operator not in {"eq", "ne"}:
             raise ValueError("Boolean filters support eq/ne only")
         if "parameter" in condition:
@@ -118,8 +125,10 @@ def validate_definition(definition, schema):
             _literal(condition["value"], kind)
 
 
-def compile_definition(definition, schema, values) -> WmiQueryPlan:
-    validate_definition(definition, schema)
+def compile_definition(definition, schema, values, *, extended=False, take=None) -> WmiQueryPlan:
+    validate_definition(definition, schema, extended=extended)
+    if take is not None and not extended:
+        raise ValueError("Prefix queries are available only through the Python API")
     clauses = []
     for condition in definition.get("filters", []):
         name, operator = condition["property"], condition["operator"]
@@ -135,9 +144,10 @@ def compile_definition(definition, schema, values) -> WmiQueryPlan:
                 value = condition["value"]
             clauses.append(f"{name}{OPERATORS[operator]}{_literal(value, definition['properties'][name])}")
     limits = definition.get("limits", {})
-    query = QuerySpec("root/cimv2", definition["class"],
-                      {name: CIM_TYPES[kind] for name, kind in definition["properties"].items()},
-                      " AND ".join(clauses), max_rows=limits.get("rows", 1000))
+    types = {**CIM_TYPES, **{name + "[]": kind | 0x2000 for name, kind in CIM_TYPES.items()}} if extended else CIM_TYPES
+    query = QuerySpec(definition.get("namespace", "root/cimv2"), definition["class"],
+                      {name: types[kind] for name, kind in definition["properties"].items()},
+                      " AND ".join(clauses), max_rows=limits.get("rows", 1000), take=take)
     if len(query.wql.encode("utf-16-le")) > 4096:
         raise ValueError("Compiled WMI query exceeds 2048 UTF-16 characters")
     return WmiQueryPlan(query, limits.get("timeout_seconds", 30),

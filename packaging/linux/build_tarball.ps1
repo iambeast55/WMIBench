@@ -1,6 +1,6 @@
 param(
     [string]$OutputDir = "dist",
-    [string]$PackageName = "remoteops-linux"
+    [string]$PackageName = "wmibench-preview"
 )
 
 $ErrorActionPreference = "Stop"

@@ -3,6 +3,8 @@ from __future__ import annotations
 import csv
 from datetime import timedelta
 
+from remoteops.ui.notices import inline_notice
+
 from PySide6.QtCore import Qt, QSortFilterProxyModel, QTimer
 from PySide6.QtGui import QColor, QStandardItem, QStandardItemModel, QTextCursor, QTextDocument
 from PySide6.QtWidgets import (
@@ -14,14 +16,15 @@ from PySide6.QtWidgets import (
 
 from remoteops.core.models import utc_now
 from remoteops.remoting.output import display_value
+from remoteops.ui.icons import set_button_icon
 
 
 def icon_button(parent, icon, label):
     button = QToolButton(parent)
-    button.setIcon(parent.style().standardIcon(icon))
+    set_button_icon(button, icon)
     button.setToolTip(label)
     button.setAccessibleName(label)
-    button.setFixedSize(30, 30)
+    button.setFixedSize(34, 34)
     return button
 
 
@@ -32,6 +35,7 @@ class FindBar(QWidget):
         row = QHBoxLayout(self)
         row.setContentsMargins(6, 4, 6, 4)
         self.query = QLineEdit()
+        self.query.setMinimumWidth(40)
         self.query.setPlaceholderText("Find in output")
         self.count = QLabel()
         previous = icon_button(self, QStyle.StandardPixmap.SP_ArrowUp, "Previous match")
@@ -85,6 +89,8 @@ class FindBar(QWidget):
 class RecordTable(QWidget):
     def __init__(self):
         super().__init__()
+        self.setObjectName("resultSurface")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(8, 8, 8, 8)
         row = QHBoxLayout()
@@ -105,12 +111,17 @@ class RecordTable(QWidget):
         self.proxy.setFilterCaseSensitivity(Qt.CaseSensitivity.CaseInsensitive)
         self.proxy.setSortRole(Qt.ItemDataRole.UserRole)
         self.table = QTableView()
+        self.table.verticalHeader().hide()
+        self.table.verticalHeader().setDefaultSectionSize(36)
+        self.table.setShowGrid(False)
+        self.table.setAlternatingRowColors(True)
         self.table.setModel(self.proxy)
         self.table.setSortingEnabled(True)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.setSelectionMode(QAbstractItemView.SelectionMode.ExtendedSelection)
         self.table.setWordWrap(False)
         self.table.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.table.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
         layout.addWidget(self.table)
         self.search.textChanged.connect(self.filter)
         copy.clicked.connect(self.copy_selection)
@@ -131,8 +142,9 @@ class RecordTable(QWidget):
                 items.append(item)
             self.model.appendRow(items)
         self.table.setSortingEnabled(True)
-        for index in range(len(columns)):
-            self.table.setColumnWidth(index, 180)
+        for index, name in enumerate(columns):
+            self.table.setColumnWidth(index, 100 if name in {"ID", "State", "Level", "Startup"} else 220)
+        self.table.horizontalHeader().setStretchLastSection(True)
         self.filter(self.search.text())
 
     def filter(self, text):
@@ -160,27 +172,35 @@ class RecordTable(QWidget):
                     values = [str(self.proxy.index(row, c).data() or "") for c in range(self.proxy.columnCount())]
                     writer.writerow(["'" + v if v.startswith(("=", "+", "-", "@")) else v for v in values])
         except OSError as exc:
-            QMessageBox.warning(self, "Export failed", str(exc))
+            inline_notice(self, "Export failed", str(exc))
 
 
 class ResultViewer(QTabWidget):
     def __init__(self):
         super().__init__()
+        self.tabBar().setObjectName("resultTabs")
         text_page = QWidget()
         layout = QVBoxLayout(text_page)
         layout.setContentsMargins(0, 0, 0, 0)
         self.text = QTextEdit()
-        self.text.setStyleSheet("font-family: 'Consolas', 'DejaVu Sans Mono', monospace; font-size: 13px;")
+        self.text.setStyleSheet("font-family: 'Consolas', 'DejaVu Sans Mono', monospace; font-size: 15px;")
         self.text.setReadOnly(True)
         self.text.setLineWrapMode(QTextEdit.LineWrapMode.NoWrap)
-        layout.addWidget(FindBar(self.text))
+        self.find_bar = FindBar(self.text)
+        self.find_bar.hide()
+        layout.addWidget(self.find_bar)
         layout.addWidget(self.text)
         self.table = RecordTable()
         self.addTab(text_page, "Output")
         self.addTab(self.table, "Table")
+        find = icon_button(self, "fa5s.search", "Find in result output")
+        find.setCheckable(True)
+        find.toggled.connect(self.find_bar.setVisible)
+        self.setCornerWidget(find)
 
     def set_result(self, result):
-        content = f"{result.command_line or result.command}\n{result.host_name} / {result.connection_mode}\n\n{result.stdout}"
+        duration = f" / {result.duration_seconds:.2f}s" if result.duration_seconds is not None else ""
+        content = f"{result.command_line or result.command}\n{'Succeeded' if result.succeeded else 'Failed'}{duration}\n\n{result.stdout}"
         if result.stderr:
             content += f"\n\n[stderr]\n{result.stderr}"
         self.text.setPlainText(content)
@@ -192,6 +212,8 @@ class HistoryWidget(QWidget):
 
     def __init__(self, repository, host_id):
         super().__init__()
+        self.setObjectName("resultSurface")
+        self.setAttribute(Qt.WidgetAttribute.WA_StyledBackground, True)
         self.repository, self.host_id = repository, host_id
         self.offset = 0
         self.results = []
@@ -212,18 +234,31 @@ class HistoryWidget(QWidget):
         filters.addWidget(self.period)
         filters.addWidget(self.all_hosts)
         layout.addLayout(filters)
-        splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter = self.splitter = QSplitter(Qt.Orientation.Vertical)
+        splitter.setChildrenCollapsible(False)
+        splitter.setHandleWidth(7)
         self.list = QTableWidget(0, 5)
         self.list.setHorizontalHeaderLabels(["Time", "Host", "Command", "Mode", "Result"])
-        self.list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Stretch)
+        self.list.horizontalHeader().setSectionResizeMode(QHeaderView.ResizeMode.Interactive)
+        self.list.horizontalHeader().setDefaultAlignment(Qt.AlignmentFlag.AlignLeft | Qt.AlignmentFlag.AlignVCenter)
+        self.list.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        for col, width in ((0, 170), (1, 145), (3, 80), (4, 105)):
+            self.list.setColumnWidth(col, width)
+        self.list.setColumnHidden(1, True)
+        self.list.setWordWrap(False)
+        self.list.setShowGrid(False)
+        self.list.setAlternatingRowColors(True)
+        self.list.verticalHeader().setDefaultSectionSize(38)
+        self.list.setMinimumHeight(100)
         self.list.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.list.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.list.verticalHeader().hide()
         self.viewer = ResultViewer()
+        self.viewer.setMinimumHeight(120)
         splitter.addWidget(self.list)
         splitter.addWidget(self.viewer)
-        splitter.setSizes([180, 360])
+        splitter.setSizes([230, 330])
         layout.addWidget(splitter, 1)
         paging = QHBoxLayout()
         self.page_label = QLabel()
@@ -243,6 +278,7 @@ class HistoryWidget(QWidget):
         self.outcome.currentIndexChanged.connect(self.reload)
         self.period.currentIndexChanged.connect(self.reload)
         self.all_hosts.toggled.connect(self.reload)
+        self.all_hosts.toggled.connect(lambda checked: self.list.setColumnHidden(1, not checked))
         self.list.itemSelectionChanged.connect(self.select)
         previous.clicked.connect(lambda: self.page(-1))
         next_button.clicked.connect(lambda: self.page(1))
@@ -269,11 +305,15 @@ class HistoryWidget(QWidget):
         self.viewer.table.set_records([])
         for row, result in enumerate(self.results):
             self.list.insertRow(row)
-            for col, value in enumerate([result.started_at.astimezone().strftime("%Y-%m-%d %H:%M:%S"), result.host_name,
+            for col, value in enumerate([result.started_at.astimezone().strftime("%b %d, %H:%M:%S"), result.host_name,
                                          result.command_line or (result.command.splitlines()[0] if result.command else ""), result.connection_mode,
                                          "Succeeded" if result.succeeded else "Failed"]):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
+                if col == 0:
+                    item.setToolTip(result.started_at.astimezone().isoformat())
+                if col == 3:
+                    item.setText("WMI" if result.connection_mode == "wmi_dcom" else "WinRM")
                 self.list.setItem(row, col, item)
         self.page_label.setText(f"{len(self.results)} runs / Page {self.offset // self.PAGE_SIZE + 1}")
         if self.results:

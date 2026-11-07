@@ -246,11 +246,29 @@ class CommandRegistry:
     """Runtime command library backed by an editable JSON file."""
 
     def __init__(self, path: Path) -> None:
+        from threading import RLock
+        self._lock = RLock()
         self.path = path
-        self.templates: list[CommandTemplate] = []
+        self._templates: list[CommandTemplate] = []
+        from remoteops.commands.plugins import PluginStore
+        self.plugins = PluginStore(path.parent / "plugins", lambda: set(TEMPLATES_BY_ALIAS) | {
+            template.alias.lower() for template in self._templates}, self._lock)
         self.load()
 
+    @property
+    def templates(self):
+        return self._templates + self.plugins.templates
+
+    @templates.setter
+    def templates(self, candidates):
+        self._templates = [template for template in candidates if template.plugin is None]
+
     def load(self) -> None:
+        with self._lock:
+            self._load()
+            self.plugins.refresh()
+
+    def _load(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         if not self.path.exists():
             self._commit(deepcopy(list(BUILTIN_TEMPLATES)))
@@ -258,6 +276,7 @@ class CommandRegistry:
 
         original = self.path.read_bytes()
         version, candidates = self._parse(original)
+        self._validate_aliases(candidates)
         if version == 1:
             backup = self.path.with_name(self.path.name + ".v1.bak")
             if backup.exists():
@@ -318,7 +337,12 @@ class CommandRegistry:
                 temporary.unlink(missing_ok=True)
 
     def _commit(self, candidates):
-        self._validate_aliases(candidates)
+        with self._lock:
+            self._commit_locked(candidates)
+
+    def _commit_locked(self, candidates):
+        candidates = [template for template in candidates if template.plugin is None]
+        self._validate_aliases(candidates + self.plugins.templates)
         self._write(self.path, candidates)
         self.templates = deepcopy(candidates)
 
@@ -330,13 +354,19 @@ class CommandRegistry:
 
     def prepare(self, command_line: str) -> PreparedCommand:
         # Reload on dispatch so external library edits take effect without a restart.
-        self.load()
-        return prepare_command(command_line, self.templates)
+        with self._lock:
+            self.load()
+            alias = command_line.strip().split(maxsplit=1)[0].lower() if command_line.strip() else ""
+            if alias not in self.aliases() and alias in self.plugins.errors:
+                raise CommandValidationError(f"Python command '{alias}' is unavailable: {self.plugins.errors[alias]}")
+            return prepare_command(command_line, self.templates)
 
     def aliases(self) -> dict[str, CommandTemplate]:
         return {template.alias.lower(): template for template in self.templates if template.alias}
 
     def upsert(self, template: CommandTemplate) -> None:
+        if template.plugin is not None:
+            raise CommandValidationError("Edit Python commands in their plugin folder; saved changes load on the next run")
         if not re.fullmatch(r"[a-z][a-z0-9-]*", template.alias.lower()):
             raise CommandValidationError("Alias must contain only letters, digits, or hyphens")
         if any(t.alias.lower() == template.alias.lower() and t.id != template.id for t in self.templates):
@@ -351,6 +381,8 @@ class CommandRegistry:
         self._commit(candidates)
 
     def delete(self, template_id: str) -> None:
+        if template_id.startswith("plugin:"):
+            raise CommandValidationError("Remove the Python command's folder from the plugins directory to uninstall it")
         self._commit([template for template in self.templates if template.id != template_id])
 
     def import_file(self, path: Path):
@@ -359,6 +391,8 @@ class CommandRegistry:
 
     def export_file(self, path: Path, templates=None):
         candidates = self.templates if templates is None else templates
+        if any(template.plugin is not None for template in candidates):
+            raise CommandValidationError("Share Python commands as folders, not command-library JSON")
         self._validate_aliases(candidates)
         if path.resolve() == self.path.resolve():
             raise CommandValidationError("Export to a separate file, not the active library")
@@ -389,6 +423,10 @@ class PreparedCommand:
     native_wmi: bool = False
     wmi_plan: WmiQueryPlan | None = None
     read_only_modes: tuple[str, ...] = ()
+    plugin: object | None = None
+    method_plan: object | None = None
+    delete_plan: object | None = None
+    module_path: str = ""
 
 
 def argument_schema(template: CommandTemplate) -> dict[str, dict]:
@@ -444,6 +482,27 @@ def _argument_value(value, spec):
     return value
 
 
+def command_line_from_values(template, values):
+    """Quote whole option tokens for our shlex parser, which disables backslash escapes."""
+    validate_template(template)
+    schema = argument_schema(template)
+    if set(values) - set(schema):
+        raise CommandValidationError("Unknown command argument")
+    parts = [template.alias]
+    for name, value in values.items():
+        if isinstance(value, str) and any(char in value for char in "\r\n\x00"):
+            raise CommandValidationError(f"{name} must be a single line")
+        try:
+            parsed = _argument_value(value, schema[name])
+        except (ValueError, TypeError, OverflowError) as exc:
+            raise CommandValidationError(f"Invalid {name}: {exc}") from exc
+        text = str(parsed).lower() if isinstance(parsed, bool) else str(parsed)
+        parts.append(shlex.quote(f"--{name.replace('_', '-')}={text}"))
+    line = " ".join(parts)
+    prepare_command(line, [template])
+    return line
+
+
 def validate_template(template):
     if not isinstance(template.category, str) or len(template.category) > 80:
         raise CommandValidationError("Command category must be text of at most 80 characters")
@@ -451,8 +510,10 @@ def validate_template(template):
         raise CommandValidationError("Command favorite must be boolean")
     if not template.name.strip() or not re.fullmatch(r"[a-z][a-z0-9-]*", template.alias.lower()):
         raise CommandValidationError("Command name and valid alias are required")
-    if not template.script.strip() and template.wmi is None:
-        raise CommandValidationError("Provide a PowerShell script or a WMI query")
+    if not template.script.strip() and not template.module_path and template.wmi is None and template.plugin is None:
+        raise CommandValidationError("Provide a PowerShell script, local script, WMI query, or Python command")
+    if not isinstance(template.module_path, str) or len(template.module_path) > 400:
+        raise CommandValidationError("Local module path must be text of at most 400 characters")
     schema = argument_schema(template)
     positional = template.parameters.get("_positional", [])
     if (not isinstance(positional, list) or any(not isinstance(name, str) or name not in schema for name in positional)
@@ -484,7 +545,9 @@ def validate_template(template):
 
 
 def command_backends(template):
-    result = ["WinRM"] if template.script.strip() else []
+    if template.plugin is not None:
+        return ["WMI/DCOM" if mode == "wmi_dcom" else "WinRM" for mode in template.plugin.backends]
+    result = ["WinRM"] if template.script.strip() or template.module_path else []
     builtin = TEMPLATES_BY_ALIAS.get(template.alias.lower())
     if template.wmi is not None or (builtin and builtin.script == template.script and template.alias.lower() in WMI_ALIASES):
         result.append("WMI/DCOM")
@@ -493,6 +556,8 @@ def command_backends(template):
 
 def command_read_only_modes(template):
     """Only audited builtin scripts and constrained WMI SELECT plans qualify."""
+    if template.plugin is not None:
+        return ()  # A Python declaration cannot establish verified read-only behavior.
     builtin = TEMPLATES_BY_ALIAS.get(template.alias.lower())
     trusted = bool(builtin and builtin.script == template.script
                    and template.alias.lower() != "restart-service"
@@ -522,7 +587,8 @@ def command_help(template: CommandTemplate) -> str:
     builtin = TEMPLATES_BY_ALIAS.get(template.alias.lower())
     native = builtin is not None and builtin.script == template.script and template.alias in WMI_ALIASES
     lines += ["", "Backends: " + ", ".join(command_backends(template)),
-              "Changes remote system: " + ("no (WMI query)" if template.wmi is not None and not template.script.strip()
+              "Changes remote system: " + (("yes (declared)" if template.plugin.modifies else "no (declared)") if template.plugin is not None
+                                           else "no (WMI query)" if template.wmi is not None and not template.script.strip()
                                            else "yes" if template.alias == "restart-service" or template.parameters.get("_modifies")
                                            else "no" if builtin else "unspecified")]
     if template.wmi is not None:
@@ -538,6 +604,12 @@ def command_help(template: CommandTemplate) -> str:
     default_example = template.alias + "".join(f" --{key.replace('_', '-')} {spec['default']}" for key, spec in schema.items() if "default" in spec)
     examples = template.parameters.get("_examples", [default_example])
     lines += ["", "Examples:", *[f"  {example}" for example in examples]]
+    if template.plugin is not None:
+        lines += ["", "Python command (not sandboxed).",
+                  "Declares remote changes: " + str(template.plugin.modifies).lower(),
+                  "Version: " + template.plugin.digest[:12],
+                  "Source: " + template.plugin.folder,
+                  "Cancellation and deadlines are cooperative; helpers never retry."]
     return "\n".join(lines)
 
 
@@ -598,6 +670,8 @@ def prepare_command(command_line: str, templates=None) -> PreparedCommand:
         if name not in values:
             if spec.get("required"):
                 raise CommandValidationError(f"Missing required argument '{name}'")
+            if template.plugin is not None and template.plugin.manifest["api_version"] >= 3:
+                continue
             values[name] = ""
         try:
             values[name] = _argument_value(values[name], spec)
@@ -607,8 +681,9 @@ def prepare_command(command_line: str, templates=None) -> PreparedCommand:
     native = bool(builtin and builtin.script == template.script and alias in WMI_ALIASES)
     plan = compile_definition(template.wmi, schema, values) if template.wmi is not None else None
     return PreparedCommand(stripped, alias, template.name, render_template(template, values), values,
-                           native_wmi=native or plan is not None, wmi_plan=plan,
-                           read_only_modes=command_read_only_modes(template))
+                           native_wmi=native or plan is not None or (template.plugin is not None and "wmi_dcom" in template.plugin.backends),
+                           wmi_plan=plan, read_only_modes=command_read_only_modes(template), plugin=template.plugin,
+                           module_path=template.module_path)
 
 
 def _template_to_dict(template: CommandTemplate) -> dict[str, object]:
@@ -618,6 +693,7 @@ def _template_to_dict(template: CommandTemplate) -> dict[str, object]:
         "alias": template.alias,
         "description": template.description,
         "script": template.script,
+        "module_path": template.module_path,
         "parameters": template.parameters,
         "wmi": template.wmi,
         "category": template.category,
@@ -626,7 +702,7 @@ def _template_to_dict(template: CommandTemplate) -> dict[str, object]:
 
 
 def _template_from_dict(data: dict[str, object]) -> CommandTemplate:
-    if set(data) - {"id", "name", "alias", "description", "script", "parameters", "wmi", "category", "favorite"}:
+    if set(data) - {"id", "name", "alias", "description", "script", "module_path", "parameters", "wmi", "category", "favorite"}:
         raise CommandValidationError("Unknown command definition field")
     if any(not isinstance(data[key], str) for key in ("id", "name", "alias", "description", "script") if key in data):
         raise CommandValidationError("Command identity, description, and script must be strings")
@@ -637,6 +713,7 @@ def _template_from_dict(data: dict[str, object]) -> CommandTemplate:
         alias=str(data.get("alias") or ""),
         description=str(data.get("description") or ""),
         script=str(data.get("script") or ""),
+        module_path=str(data.get("module_path") or ""),
         parameters=dict(data.get("parameters") or {}),
         wmi=deepcopy(data.get("wmi")),
         category=data.get("category", ""),

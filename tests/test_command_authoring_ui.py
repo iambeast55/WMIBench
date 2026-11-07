@@ -60,7 +60,7 @@ class CommandAuthoringUiTests(unittest.TestCase):
         dialog.validate_preview()
         self.assertEqual(dialog.validation_status.text(), "Invalid definition")
         self.assertIn("Invalid WMI identifier", dialog.preview.toPlainText())
-        with patch.object(QMessageBox, "warning") as warning:
+        with patch("remoteops.ui.main_window.inline_notice") as warning:
             dialog.accept()
             warning.assert_called_once()
         self.assertNotEqual(dialog.result(), QDialog.DialogCode.Accepted)
@@ -76,7 +76,7 @@ class CommandAuthoringUiTests(unittest.TestCase):
         prepared = prepare_command("my-service Schedule", [dialog.template()])
         self.assertEqual(prepared.wmi_plan.query.where, "Name='Schedule'")
         dialog.wmi_filters.setPlainText("not JSON")
-        with patch.object(QMessageBox, "warning") as warning:
+        with patch("remoteops.ui.main_window.inline_notice") as warning:
             dialog.accept()
             warning.assert_called_once()
 
@@ -97,7 +97,7 @@ class CommandAuthoringUiTests(unittest.TestCase):
         self.assertIsNotNone(self.registry.prepare("bios-copy").wmi_plan)
         before = self.registry.path.read_bytes()
         with patch("remoteops.ui.main_window.QFileDialog.getOpenFileName", return_value=(str(export), "")), \
-                patch.object(QMessageBox, "warning") as warning:
+                patch("remoteops.ui.main_window.inline_notice") as warning:
             library.import_commands()
             warning.assert_called_once()
         self.assertEqual(self.registry.path.read_bytes(), before)

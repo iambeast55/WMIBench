@@ -7,7 +7,8 @@ from abc import ABC, abstractmethod
 from inspect import signature
 
 from remoteops.core.credentials import ResolvedCredential
-from remoteops.core.models import CommandResult, CredentialProfile, Host, SessionState, utc_now
+from remoteops.core.models import AuthMethod, CommandResult, CredentialProfile, Host, SessionState, utc_now
+from remoteops.core.authentication import ntlm_identity, portable_kerberos
 from remoteops.remoting.output import output_records, records_text
 
 
@@ -124,6 +125,7 @@ class PsrpSession(PersistentSession):
         self._pool = None
         self._wsman = None
         self._stream_text = ""
+        self.ticket_provider = None
 
     def connect(self, credential: ResolvedCredential | None = None) -> None:
         try:
@@ -141,19 +143,32 @@ class PsrpSession(PersistentSession):
         try:
             username = credential.username if credential else self.profile.username
             password = credential.secret if credential else None
+            if self.profile.method is AuthMethod.NTLM_HASH:
+                username = ntlm_identity(username, password, self.profile.method)
+                password = None
             ssl = self.host.transport.value == "https"
+            address = self.host.address
+            kerberos = portable_kerberos(self.profile)
+            if kerberos:
+                from remoteops.remoting.kerberos import TicketProvider
+                self.ticket_provider = TicketProvider(self.host, self.profile, credential)
+                address = self.ticket_provider.hostname
+                password = None
             self._wsman = WSMan(
-                self.host.address,
+                address,
                 username=username or None,
                 password=password,
                 ssl=ssl,
                 port=self.host.port,
-                auth=self.profile.method.value,
+                auth="kerberos" if kerberos else "ntlm" if self.profile.method is AuthMethod.NTLM_HASH else self.profile.method.value,
                 connection_timeout=CONNECT_TIMEOUT_SECONDS,
                 operation_timeout=OPERATION_TIMEOUT_SECONDS,
                 read_timeout=READ_TIMEOUT_SECONDS,
                 reconnection_retries=0,
             )
+            if kerberos:
+                from remoteops.remoting.kerberos_http import configure
+                configure(self._wsman, self.ticket_provider)
             self._pool = RunspacePool(self._wsman, min_runspaces=1, max_runspaces=1)
             self._pool.open()
             _output, errors = self.execute("$PSVersionTable.PSVersion.ToString()", 30)
@@ -172,14 +187,15 @@ class PsrpSession(PersistentSession):
             self.last_error = _format_exception(exc)
             raise RemoteSessionError(self.last_error) from exc
 
-    def run(self, command: str, timeout_seconds: int = 120) -> CommandResult:
+    def run(self, command: str, timeout_seconds: int = 120, *, cancel=None) -> CommandResult:
         if self._pool is None or self.state is SessionState.DISCONNECTED:
             raise RemoteSessionError("Session is not connected")
 
         result = CommandResult(host_id=self.host.id, host_name=self.host.name, command=command)
         self.state = SessionState.RUNNING
         try:
-            output, errors = self.execute(command, timeout_seconds)
+            output, errors = (self.execute(command, timeout_seconds, cancel=cancel) if cancel is not None
+                              else self.execute(command, timeout_seconds))
             result.records = output_records(output)
             result.stdout = records_text(result.records)
             if self._stream_text:
@@ -203,9 +219,11 @@ class PsrpSession(PersistentSession):
         finally:
             self.state = SessionState.DISCONNECTED
 
-    def execute(self, script: str, timeout_seconds: int = 120):
+    def execute(self, script: str, timeout_seconds: int = 120, *, cancel=None):
         from pypsrp.powershell import PowerShell, PSInvocationState
 
+        if cancel is not None and cancel.is_set():
+            raise CommandExecutionError("Command cancelled before dispatch.")
         pipeline = PowerShell(self._pool)
         pipeline.add_script(script, use_local_scope=False)
         deadline = time.monotonic() + timeout_seconds
@@ -213,17 +231,19 @@ class PsrpSession(PersistentSession):
             pipeline.begin_invoke()
             while pipeline.state == PSInvocationState.RUNNING:
                 remaining = deadline - time.monotonic()
-                if remaining <= 0:
+                cancelled = cancel is not None and cancel.is_set()
+                if remaining <= 0 or cancelled:
                     pipeline.stop()
                     if pipeline.state not in (PSInvocationState.STOPPED, PSInvocationState.COMPLETED, PSInvocationState.FAILED):
                         raise RemoteSessionError("Timed-out pipeline could not be confirmed stopped; reconnect explicitly.")
-                    raise CommandExecutionError(f"Command timed out after {timeout_seconds}s; remote side effects may already have occurred.")
+                    reason = "Command cancelled" if cancelled else f"Command timed out after {timeout_seconds}s"
+                    raise CommandExecutionError(reason + "; remote side effects may already have occurred.")
                 pipeline.poll_invoke(timeout=max(1, min(5, int(remaining))))
             errors = _format_ps_error_stream(pipeline.streams)
             if pipeline.state == PSInvocationState.FAILED and not errors:
                 errors = "Remote pipeline failed without an error record"
             self._stream_text = "\n".join(
-                f"[{name}] {item}" for name in ("warning", "verbose", "debug", "information")
+                f"[{name}] {_stream_record_text(item)}" for name in ("warning", "verbose", "debug", "information")
                 for item in getattr(pipeline.streams, name, [])
             )
             return pipeline.output, errors
@@ -263,6 +283,9 @@ class PsrpSession(PersistentSession):
                     resource.close()
                 except Exception as exc:
                     failure = exc
+        if self.ticket_provider:
+            self.ticket_provider.close()
+            self.ticket_provider = None
         if failure and not ignore_errors:
             raise failure
 
@@ -313,6 +336,15 @@ def _stringify_ps_output(output: object) -> str:
         return str(output)
 
     return "\n".join(str(item) for item in items if item is not None)
+
+
+def _stream_record_text(record: object) -> str:
+    """Extract text from pypsrp's informational stream record types."""
+    for attribute in ("message_data", "message", "status_description", "activity"):
+        value = getattr(record, attribute, None)
+        if value is not None:
+            return _stringify_ps_output(value)
+    return _stringify_ps_output(record)
 
 
 def _format_ps_error_stream(streams: object) -> str:

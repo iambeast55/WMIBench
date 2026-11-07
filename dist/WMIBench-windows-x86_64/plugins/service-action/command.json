@@ -1,0 +1,36 @@
+{
+  "api_version": 2,
+  "alias": "service-action",
+  "name": "Service action",
+  "description": "Invoke one service method. Changes the selected host.",
+  "category": "Python",
+  "parameters": {
+    "_positional": [
+      "service_name",
+      "action"
+    ],
+    "_schema": {
+      "service_name": {
+        "type": "str",
+        "required": true,
+        "description": "Exact service name"
+      },
+      "action": {
+        "type": "str",
+        "default": "StartService",
+        "choices": [
+          "StartService",
+          "StopService",
+          "PauseService",
+          "ResumeService"
+        ],
+        "description": "Method"
+      }
+    }
+  },
+  "backends": [
+    "wmi_dcom"
+  ],
+  "modifies_remote": true,
+  "entry_point": "implementation.py:run"
+}

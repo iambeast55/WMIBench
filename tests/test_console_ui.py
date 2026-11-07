@@ -8,9 +8,9 @@ from unittest.mock import patch
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt
 from PySide6.QtTest import QTest
-from PySide6.QtWidgets import QApplication, QMessageBox, QPlainTextEdit, QPushButton
+from PySide6.QtWidgets import QApplication, QMessageBox
 
 from remoteops.core.database import Repository
 from remoteops.core.models import AuthMethod, CommandResult, CredentialProfile, Host, SessionState
@@ -83,6 +83,23 @@ class ConsoleUiTests(unittest.TestCase):
         self.assertTrue(self.tab.connect_button.isEnabled())
         self.assertFalse(self.tab.disconnect_button.isEnabled())
 
+    def test_command_error_is_not_repeated_by_session_poll(self):
+        detail = "Create outcome unconfirmed; lost reply"
+        result = CommandResult(self.host.id, self.host.name, "create", stderr=detail, exit_code=1)
+        with patch.object(self.manager, "states", return_value={(self.host.id, None): SessionState.ERROR}), \
+             patch.object(self.manager, "errors", return_value={self.host.id: detail}), \
+             patch.object(self.manager, "schedule_keepalives"):
+            self.window.append_terminal_result(result, self.tab.terminal)
+            self.window.check_sessions()
+            self.window.check_sessions()
+            text = self.tab.terminal.toPlainText()
+            self.assertEqual(text.count("The action's final result is unknown."), 1)
+            self.assertIn(detail, text)
+            # A new underlying failure is still surfaced by the poll.
+            with patch.object(self.manager, "errors", return_value={self.host.id: "RPC server unavailable"}):
+                self.window.check_sessions()
+            self.assertIn("could not be reached", self.tab.terminal.toPlainText())
+
     def test_failure_retains_full_error_and_reenables_controls(self):
         class FailedSession(FakeSession):
             def connect(self, credential=None):
@@ -95,9 +112,9 @@ class ConsoleUiTests(unittest.TestCase):
         self.assertTrue(self.tab.connect_button.isEnabled())
         self.assertFalse(self.tab.progress.isVisible())
         self.assertIn("Authentication failed", self.tab.terminal.toPlainText())
-        self.assertNotIn("Traceback", self.tab.terminal.toPlainText())
-        self.assertIn("x" * 600, self.tab.error_detail)
-        self.assertTrue(self.tab.error_details_button.isEnabled())
+        self.assertIn("Traceback", self.tab.terminal.toPlainText())
+        self.assertIn("x" * 600, self.tab.terminal.toPlainText())
+        self.assertFalse(hasattr(self.tab, "error_details_button"))
 
     def test_profile_selection_persists_without_losing_output(self):
         profile = self.repository.save_credential_profile(CredentialProfile(name="Ops", username="ops"))
@@ -107,9 +124,9 @@ class ConsoleUiTests(unittest.TestCase):
         self.assertEqual(self.repository.get_host(self.host.id).auth_profile_id, profile.id)
         self.assertIn("Existing output", self.tab.terminal.toPlainText())
         self.window.host_search.setText("does-not-exist")
-        self.assertTrue(self.window.host_table.isRowHidden(0))
+        self.assertTrue(self.window.host_tree.host_items[self.host.id].isHidden())
         self.window.host_search.setText("EXAMPLE")
-        self.assertFalse(self.window.host_table.isRowHidden(0))
+        self.assertFalse(self.window.host_tree.host_items[self.host.id].isHidden())
 
     def test_connected_command_does_not_prompt_or_echo_expansion(self):
         profile = self.repository.save_credential_profile(
@@ -122,13 +139,13 @@ class ConsoleUiTests(unittest.TestCase):
         self.window.refresh_statuses()
         result = CommandResult(self.host.id, self.host.name, "expanded script", stdout="output", exit_code=0)
         with patch.object(self.window, "resolve_credential_for_profile") as prompt:
-            with patch.object(self.manager, "run_command_with_credential", return_value=result):
+            with patch.object(self.manager, "run_prepared_with_credential", return_value=result):
                 self.tab.command_input.setText("sysinfo")
                 self.tab.run_button.click()
                 self.wait_for_workers()
             prompt.assert_not_called()
         output = self.tab.terminal.toPlainText()
-        self.assertIn("remoteops> sysinfo", output)
+        self.assertIn("wmibench> sysinfo", output)
         self.assertNotIn("Get-CimInstance", output)
         self.tab.command_input.setText("draft")
         QTest.keyClick(self.tab.command_input, Qt.Key.Key_Up)
@@ -157,39 +174,21 @@ class ConsoleUiTests(unittest.TestCase):
         self.window.finish_run(self.host.id, self.tab.terminal, WorkerOutcome(error="Local history save failed"))
         self.assertEqual(self.tab.status_text.text(), "Connected")
         self.assertIn("still connected", self.tab.terminal.toPlainText())
-        self.assertEqual(self.tab.error_detail, "Local history save failed")
+        self.assertIn("Local history save failed", self.tab.terminal.toPlainText())
 
-    def test_details_are_copyable_and_picker_only_inserts(self):
+    def test_errors_are_copyable_in_console_without_extra_controls(self):
         self.manager.connect(self.host)
         self.window.refresh_statuses()
         self.assertEqual(self.tab.status_text.text(), "Connected")
         detail = "Traceback: fixture\nAccess denied 0x80041003\n" + "x" * 600
         self.window.present_error(self.host.id, self.tab.terminal, detail)
-        captured = {}
-
-        def inspect_details():
-            dialog = self.app.activeModalWidget()
-            captured["text"] = dialog.findChild(QPlainTextEdit).toPlainText()
-            copy = next(button for button in dialog.findChildren(QPushButton) if button.text() == "Copy details")
-            copy.click()
-            captured["clipboard"] = self.app.clipboard().text()
-            dialog.reject()
-
-        QTimer.singleShot(0, inspect_details)
-        self.tab.error_details_button.click()
-        self.assertEqual(captured, {"text": detail, "clipboard": detail})
-
-        def choose_command():
-            dialog = self.app.activeModalWidget()
-            row = next(row for row in range(dialog.table.rowCount()) if dialog.table.item(row, 0).text() == "sysinfo")
-            dialog.table.selectRow(row)
-            dialog.insert_button.click()
-
-        with patch.object(self.window, "start_worker") as worker:
-            QTimer.singleShot(0, choose_command)
-            self.tab.browse_commands_button.click()
-            self.assertEqual(self.tab.command_input.text(), "sysinfo")
-            worker.assert_not_called()
+        self.tab.terminal.selectAll()
+        self.tab.terminal.copy()
+        self.assertIn(detail, self.app.clipboard().text())
+        for name in ("error_details_button", "browse_commands_button", "arguments_button"):
+            self.assertFalse(hasattr(self.tab, name))
+        self.assertEqual([self.tab.view_tabs.tabText(i) for i in range(self.tab.view_tabs.count())],
+                         ["Terminal", "History", "Services", "Events", "Tools", "Explorer"])
         folder = os.environ.get("REMOTEOPS_CAPTURE_DIR")
         if folder:
             target = Path(folder)
@@ -249,7 +248,7 @@ class ConsoleUiTests(unittest.TestCase):
                     self.tab.run_button.click()
                     self.wait_for_workers()
                 prompt.assert_not_called()
-            self.assertEqual(self.tab.result_table.proxy.rowCount(), 1)
+            self.assertEqual(self.tab.history.viewer.table.proxy.rowCount(), 1)
             self.assertIn("FIXTURE", self.tab.terminal.toPlainText())
             self.assertNotIn("synthetic-secret", self.tab.terminal.toPlainText())
             self.assertEqual(self.tab.status_text.text(), "Connected")
@@ -273,7 +272,7 @@ class ConsoleUiTests(unittest.TestCase):
                 self.wait_for_workers()
                 self.assertEqual(self.tab.status_text.text(), "Connected")
                 self.assertIn("response could not be read", self.tab.terminal.toPlainText())
-                self.assertIn("unexpected CIM class", self.tab.error_detail)
+                self.assertIn("unexpected CIM class", self.tab.terminal.toPlainText())
                 self.assertEqual(client.closes, 0)
                 client.failure = None
                 self.tab.command_input.setText("sysinfo")

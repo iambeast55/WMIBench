@@ -5,6 +5,8 @@ from collections import Counter
 from copy import deepcopy
 from itertools import islice
 
+from remoteops.ui.notices import inline_notice
+
 from PySide6.QtCore import QObject, QRunnable, Qt, QTimer, Signal, Slot
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QDialog, QFileDialog, QHBoxLayout,
@@ -14,9 +16,11 @@ from PySide6.QtWidgets import (
 
 from remoteops.commands.templates import command_read_only_modes, prepare_command
 from remoteops.core.models import AuthMethod, CommandResult, SessionState
+from remoteops.core.authentication import portable_kerberos
 from remoteops.remoting.batch import BatchRunner, BatchTarget, BatchUpdate, batch_records, export_batch_csv
 from remoteops.ui.errors import error_summary
 from remoteops.ui.results import RecordTable, ResultViewer, icon_button
+from remoteops.ui.icons import set_button_icon
 
 
 class BatchSignals(QObject):
@@ -71,7 +75,7 @@ class BatchDialog(QDialog):
         self.command.setAccessibleName("Multi-host command")
         self.templates = deepcopy(window.command_registry.templates)
         for template in sorted(self.templates, key=lambda t: (not t.favorite, t.alias)):
-            if command_read_only_modes(template):
+            if command_read_only_modes(template) or (template.plugin is not None and not template.plugin.modifies):
                 self.command.addItem(template.alias)
                 self.command.setItemData(self.command.count() - 1, template.description, Qt.ItemDataRole.ToolTipRole)
         self.command.setCurrentText("sysinfo")
@@ -84,6 +88,10 @@ class BatchDialog(QDialog):
         self.connect_new = QCheckBox("Connect disconnected hosts")
         controls.addWidget(self.connect_new)
         layout.addLayout(controls)
+        self.allow_python = QCheckBox("Allow trusted Python for this batch (not verified read-only)")
+        self.allow_python.setChecked(False)
+        self.allow_python.toggled.connect(lambda: self.refresh_preflight())
+        layout.addWidget(self.allow_python)
 
         self.pages = QTabWidget()
         selection = QWidget()
@@ -152,7 +160,7 @@ class BatchDialog(QDialog):
         self.export_button.setEnabled(False)
         self.run_button = QPushButton("Run selected")
         self.run_button.setObjectName("primary")
-        self.run_button.setIcon(self.style().standardIcon(QStyle.StandardPixmap.SP_MediaPlay))
+        set_button_icon(self.run_button, QStyle.StandardPixmap.SP_MediaPlay)
         self.cancel_button = QPushButton("Cancel queued")
         self.cancel_button.setEnabled(False)
         self.close_button = QPushButton("Close")
@@ -228,7 +236,9 @@ class BatchDialog(QDialog):
     def eligibility(self, host, command):
         profile = self.profiles.get(host.auth_profile_id)
         state = self.manager.session_state(host, profile)
-        if command.help_text or host.connection_mode.value not in command.read_only_modes:
+        python_allowed = (self.allow_python.isChecked() and command.plugin is not None
+                          and not command.plugin.modifies and host.connection_mode.value in command.plugin.backends)
+        if command.help_text or (host.connection_mode.value not in command.read_only_modes and not python_allowed):
             return "Not verified read-only for this backend", state
         tab = self.window.host_tabs_by_id.get(host.id)
         if (tab and tab.busy) or self.manager.host_busy(host.id):
@@ -282,10 +292,10 @@ class BatchDialog(QDialog):
                 reason, state = self.eligibility(host, command)
                 targets.append(BatchTarget(host, command, profile,
                                            allow_connect=not reason and state is not SessionState.CONNECTED,
-                                           skip_reason=reason))
+                                           skip_reason=reason, approve_python=self.allow_python.isChecked() and command.plugin is not None))
             eligible = [target for target in targets if not target.skip_reason]
             if not eligible:
-                QMessageBox.information(self, "No eligible hosts", "No selected host can run this read-only command.")
+                inline_notice(self, "No eligible hosts", "No selected host can run this read-only command.")
                 self.refresh_preflight()
                 return
             new = [target for target in eligible if target.allow_connect]
@@ -297,6 +307,9 @@ class BatchDialog(QDialog):
                     f"skip {len(targets) - len(eligible)} hosts.")
             if names:
                 text += "\n\nNew connections:\n" + names
+            if command.plugin is not None:
+                from remoteops.commands.plugins import TRUST_WARNING
+                text += "\n\n" + TRUST_WARNING + "\nVersion: " + command.plugin.digest[:12]
             if QMessageBox.question(self, "Confirm multi-host run", text,
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                     QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
@@ -316,13 +329,13 @@ class BatchDialog(QDialog):
                 credential, failure = credentials[profile.id]
                 if failure:
                     target.skip_reason = failure
-                elif credential is None or (profile.method in (AuthMethod.NTLM, AuthMethod.BASIC) and not credential.secret):
+                elif credential is None or ((profile.method in (AuthMethod.NTLM, AuthMethod.NTLM_HASH, AuthMethod.BASIC) or portable_kerberos(profile)) and not credential.secret):
                     target.skip_reason = "Credential entry cancelled or missing; no connection attempted."
                 else:
                     target.credential = credential
             self.runner = BatchRunner(self.manager, targets, self.concurrency.value())
         except (ValueError, OSError) as exc:
-            QMessageBox.warning(self, "Batch not started", str(exc))
+            inline_notice(self, "Batch not started", str(exc))
             return
         self.batch_hosts = [deepcopy(target.host) for target in targets]
         self.cancellation_requested = False
@@ -378,7 +391,6 @@ class BatchDialog(QDialog):
             tab = self.window.host_tabs_by_id.get(update.host_id)
             if tab:
                 self.window.append_terminal_result(update.result, tab.terminal, batch=True)
-                tab.result_table.set_records(update.result.records)
                 tab.history.reload()
 
     def update_progress(self):
@@ -447,7 +459,7 @@ class BatchDialog(QDialog):
             try:
                 export_batch_csv(path, self.batch_hosts, self.updates)
             except OSError as exc:
-                QMessageBox.warning(self, "Export failed", str(exc))
+                inline_notice(self, "Export failed", str(exc))
 
     def cancel_queued(self):
         if self.runner:
