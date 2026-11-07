@@ -10,6 +10,8 @@ build/
 dist/*
 !dist/WMIBench-windows-x86_64/
 !dist/WMIBench-windows-x86_64/**
+dist/WMIBench-windows-x86_64/WMIBench.exe
+dist/WMIBench-windows-x86_64/WMIBench.exe.sha256
 
 *.log
 *.tmp
