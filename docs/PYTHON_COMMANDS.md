@@ -87,7 +87,7 @@ plugin alias and full source/manifest SHA-256 digest.
 - `ctx.query(class_name=..., properties=..., namespace="root/cimv2", filters=[],
   rows=1000, timeout_seconds=30, take=None)`: returns rows through the existing WMI session.
   Python queries additionally support root-relative namespaces and array projections
-  such as `string[]`. No raw WQL or SELECT *. `rows` is an overflow safety limit;
+  such as `string[]`. No raw WQL or SELECT *. `rows` is an overflow result limit;
   `take=N` explicitly returns at most the first N enumerated rows, without ordering guarantees.
   Per-query limits are 1..10,000 rows and 1..60 seconds, bounded by the remaining
   total command deadline. Filters use literal values, not raw fragments.
@@ -196,11 +196,11 @@ even for a read method such as EnumKey; the app does not infer method side effec
   Keep backup copies outside the plugin root to avoid duplicate-alias conflicts.
 - Legacy `plugin-trust.json` files are ignored and left untouched. No approval state
   is needed, including after restarting the application.
-- Python is **trusted local code, not a sandbox**. It has your account's permissions
+- Python plugins run as local code under your account. They have your account's permissions
   and may read files, access the network or mutate process state. No raw credentials
-  in the public API does not prevent trusted Python from accessing application data.
+  in the public API does not prevent plugin code from accessing application data.
 - The read-only manifest flag is only a declaration. Multi-host execution requires
-  the separate **Allow trusted Python for this batch** checkbox and explicit confirmation.
+  the separate **Run Python plugins for this batch** checkbox and explicit confirmation.
   Commands declaring remote changes are excluded from batches in this version.
 - Command exceptions do not disconnect a healthy session. Genuine transport or
   uncertain cleanup failures still require explicit reconnect. Nothing automatically

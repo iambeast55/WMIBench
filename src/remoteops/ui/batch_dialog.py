@@ -88,7 +88,7 @@ class BatchDialog(QDialog):
         self.connect_new = QCheckBox("Connect disconnected hosts")
         controls.addWidget(self.connect_new)
         layout.addLayout(controls)
-        self.allow_python = QCheckBox("Allow trusted Python for this batch (not verified read-only)")
+        self.allow_python = QCheckBox("Run Python plugins for this batch")
         self.allow_python.setChecked(False)
         self.allow_python.toggled.connect(lambda: self.refresh_preflight())
         layout.addWidget(self.allow_python)
@@ -308,8 +308,7 @@ class BatchDialog(QDialog):
             if names:
                 text += "\n\nNew connections:\n" + names
             if command.plugin is not None:
-                from remoteops.commands.plugins import TRUST_WARNING
-                text += "\n\n" + TRUST_WARNING + "\nVersion: " + command.plugin.digest[:12]
+                text += "\n\nPlugin version: " + command.plugin.digest[:12]
             if QMessageBox.question(self, "Confirm multi-host run", text,
                                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                     QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:

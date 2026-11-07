@@ -7,7 +7,7 @@ import unittest
 from pathlib import Path
 from types import ModuleType
 
-from remoteops.commands.plugins import PluginStore, TRUST_WARNING, _read, read_plugin
+from remoteops.commands.plugins import PLUGIN_NOTE, PluginStore, _read, read_plugin
 
 
 def main(argv=None):
@@ -20,7 +20,7 @@ def main(argv=None):
     validate.add_argument("folder", type=Path)
     test = commands.add_parser("test")
     test.add_argument("folder", type=Path)
-    test.add_argument("--trust", action="store_true", help="Authorize local Python execution; not a sandbox")
+    test.add_argument("--trust", action="store_true", help="Run the local Python tests")
     args = parser.parse_args(argv)
     try:
         if args.command == "create":
@@ -32,7 +32,7 @@ def main(argv=None):
         if args.command == "validate":
             return 0
         if not args.trust:
-            parser.error(TRUST_WARNING + " Pass --trust after reviewing the implementation and tests.")
+            parser.error(PLUGIN_NOTE + " Use --trust to run the local tests.")
         folder = args.folder.resolve()
         test_file = folder / "test_implementation.py"
         if not test_file.is_file() or test_file.is_symlink():

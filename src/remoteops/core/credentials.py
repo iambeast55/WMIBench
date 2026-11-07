@@ -76,7 +76,11 @@ class CredentialStore:
         return self._cipher(create=True).encrypt(payload)
 
     def get_secret(self, profile: CredentialProfile) -> str | None:
-        if profile.prompt_for_secret:
+        # Use an encrypted value when one exists, even if an older profile has
+        # a stale prompt flag. Profiles with no saved value still prompt.
+        if profile.prompt_for_secret and (
+            self.repository is None or self.repository.get_encrypted_secret(profile.id) is None
+        ):
             return None
         data = self.repository.get_encrypted_secret(profile.id) if self.repository else None
         if data is not None:

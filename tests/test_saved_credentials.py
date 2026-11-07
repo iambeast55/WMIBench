@@ -59,6 +59,13 @@ class SavedCredentialTests(unittest.TestCase):
             self.store.save_profile(self.profile)
         self.store._keyring.get_password.assert_not_called()
 
+    def test_saved_secret_is_used_if_prompt_flag_is_stale(self):
+        self.store.save_profile(self.profile, self.secret)
+        stale = deepcopy(self.profile)
+        stale.prompt_for_secret = True
+        self.repository.save_credential_profile(stale)
+        self.assertEqual(self.store.resolve(stale).secret, self.secret)
+
     def test_failed_encryption_does_not_commit_profile_changes(self):
         self.store.save_profile(self.profile, self.secret)
         edited = deepcopy(self.profile)

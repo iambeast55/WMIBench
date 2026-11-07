@@ -1,7 +1,7 @@
 # Adding WMI Commands
 
 There are three extension paths: add a read-only query in the Command Library,
-install a trusted [Python command](PYTHON_COMMANDS.md) for custom logic without
+install a [Python command](PYTHON_COMMANDS.md) for custom logic without
 rebuilding, or extend the source-defined catalog/backend for a new transport
 capability. Custom definitions run through the same Windows/Linux WMI sessions,
 tables, history, and error handling as built-in commands. Saving never contacts a host.
@@ -174,7 +174,7 @@ login, operation, and ping failures do not close the primary session. A failed
 auxiliary connection is removed from the cache; a later explicit command can open
 a replacement. Local result-formatting errors do not close healthy connections.
 Known by-value method results that cannot be decoded retain the channel but report
-an unknown action outcome. Never treat an unreadable or lost method reply as safe
+an unknown action outcome. Never treat an unreadable or lost method reply as confirmed
 to retry; there is no automatic command replay.
 
 Restart changes the target. An already stopped service is started. Failure after

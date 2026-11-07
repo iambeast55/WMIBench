@@ -114,7 +114,7 @@ scheduled-task delete RemoteOpsLab
   an interactive desktop or return program output. Stop requests termination;
   delete unregisters a task, and is not a substitute for stopping a running task.
 - `export` returns XML in `cmdletOutput`; protect exports as potentially sensitive.
-  `--limit` is a list safety cap, not an ordered or silently truncated prefix.
+  `--limit` is a list row limit, not an ordered or silently truncated prefix.
 
 ## Registry
 

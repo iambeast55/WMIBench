@@ -52,7 +52,7 @@ There is no server-side provider/ID/time filter or older-event pagination yet.
 WMI retrieval retains its existing scan, byte, row, and time limits, including the
 record-number-wrap limitation. Requesting a small count does not download a full log.
 
-## Results And Safety
+## Results And Actions
 
 All dispatched view commands also populate Terminal and History. The redundant Table
 tab is removed; History retains its structured result table and export controls. Inspection

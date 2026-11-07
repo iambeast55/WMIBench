@@ -87,7 +87,7 @@ rows = ctx.query(
   `le`, `gt`, `ge`, `is_null`, `not_null`. Use `value`, not `parameter`, in Python
   helper filters. Null checks omit `value`. Filter properties must also be selected.
   Boolean fields support eq/ne; arrays support null checks only. Escaping is automatic.
-- `rows` is a safety cap from 1 to 10,000, default 1,000. Without `take`, exceeding
+- `rows` is a result limit from 1 to 10,000, default 1,000. Without `take`, exceeding
   it fails the query instead of silently dropping results.
 - `take=N` explicitly stops after at most N rows; N must be between 1 and `rows`.
   Enumeration order is provider-defined: first N does not mean newest or highest N.
@@ -239,7 +239,7 @@ named Delete. It requires a keyed or singleton instance path, a WMI backend and
 `modifies_remote: true`. Class deletion and remote-host redirection are rejected.
 It returns only after successful completion; failures raise, and no action is retried.
 There is no provider ReturnValue to pass to `require_success`. Session reuse,
-deadlines, cancellation and uncertain-outcome warnings follow invoke's rules.
+deadlines, cancellation and uncertain outcomes follow invoke's rules.
 History records the attempted path and successful HRESULT when confirmed.
 
 Offline tests use `FakeContext(delete_results=[{"Deleted": True}], modifies_remote=True)`;

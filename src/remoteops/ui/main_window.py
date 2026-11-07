@@ -603,7 +603,7 @@ class MainWindow(QMainWindow):
         profile = self.profile_for_host(host)
         credential = self.resolve_credential_for_profile(profile)
         if profile and credential is None and (profile.method in {AuthMethod.NTLM, AuthMethod.NTLM_HASH, AuthMethod.BASIC} or portable_kerberos(profile)):
-            append_terminal(terminal, "[connection cancelled: credential required]", "warning")
+            append_terminal(terminal, "[connection cancelled: credential required]", "muted")
             return
         append_terminal(terminal, "[connecting...]", "progress")
         self.set_host_state(host.id, SessionState.CONNECTING)
@@ -649,13 +649,13 @@ class MainWindow(QMainWindow):
                 QMessageBox.StandardButton.No,
             )
             if answer != QMessageBox.StandardButton.Yes:
-                append_terminal(terminal, "[service restart cancelled]", "warning")
+                append_terminal(terminal, "[service restart cancelled]", "muted")
                 return
         profile = self.profile_for_host(host)
         connected = self.state_for_host(host) is SessionState.CONNECTED
         credential = None if connected else self.resolve_credential_for_profile(profile)
         if not connected and profile and credential is None and (profile.method in {AuthMethod.NTLM, AuthMethod.NTLM_HASH, AuthMethod.BASIC} or portable_kerberos(profile)):
-            append_terminal(terminal, "[run cancelled: credential required]", "warning")
+            append_terminal(terminal, "[run cancelled: credential required]", "muted")
             return
         append_terminal(terminal, "[running...]", "progress")
         cancel = Event() if command.plugin is not None else None
@@ -693,7 +693,7 @@ class MainWindow(QMainWindow):
             self.plugin_cancels[host_id].set()
             tab = self.host_tabs_by_id.get(host_id)
             if tab:
-                append_terminal(tab.terminal, "[cancellation requested; waiting for a command checkpoint]", "warning")
+                append_terminal(tab.terminal, "[cancellation requested; waiting for a command checkpoint]", "muted")
 
     def transfer_file(self, host, direction, remote_path=None):
         from remoteops.ui.transfer_dialog import TransferDialog
@@ -1376,7 +1376,7 @@ class AuthProfilesDialog(QDialog):
         self.table.setRowCount(len(self.profiles))
         for row, profile in enumerate(self.profiles):
             stored = isinstance(parent, MainWindow) and parent.repository.get_encrypted_secret(profile.id) is not None
-            secret_mode = "Prompt when needed" if profile.prompt_for_secret else ("Saved in database" if stored else "Legacy keychain / not saved")
+            secret_mode = "Saved in database" if stored else ("Prompt when needed" if profile.prompt_for_secret else "Legacy keychain / not saved")
             for col, value in enumerate([profile.name, profile.username, profile.method.value.upper(), secret_mode]):
                 item = QTableWidgetItem(value)
                 item.setToolTip(value)
@@ -2161,7 +2161,6 @@ TERMINAL_COLORS = {
     "muted": "#9aa4b2",
     "progress": "#f6c177",
     "success": "#85cba6",
-    "warning": "#f6c177",
     "error": "#ff7b72",
     "stderr": "#ff9b94",
     "stdout": "#dce2e5",

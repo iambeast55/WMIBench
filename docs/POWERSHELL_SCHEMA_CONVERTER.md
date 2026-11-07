@@ -42,6 +42,6 @@ become Boolean arguments with a default of `false`; WMIBench currently expects
 
 PowerShell arrays, computed defaults, custom validation attributes, and rich
 objects are not representable by the current WMIBench schema. The converter
-keeps the command usable where possible and prints a warning for anything it
+keeps the command usable where possible and reports anything it
 could not map exactly. Arrays and complex values should generally be accepted
 as strings and parsed by the PowerShell wrapper.

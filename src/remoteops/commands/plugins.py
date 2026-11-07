@@ -13,9 +13,8 @@ from remoteops.core.models import CommandTemplate
 
 API_VERSION = 3
 MAX_FILE_BYTES = 1024 * 1024
-TRUST_WARNING = (
-    "Plugins run locally as your account and use the host connection for remote operations. "
-    "They can access local files and credentials; read-only plugins are not sandboxed."
+PLUGIN_NOTE = (
+    "Python plugins run locally under your account and can use local files and the selected remote session."
 )
 
 
