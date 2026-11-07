@@ -314,7 +314,7 @@ class EventPanel(InspectionPanel):
         for column, width in enumerate((155, 60, 145, 85)):
             self.table.table.setColumnWidth(column, width)
         if invalid:
-            self.status.setText("Event ID must be a nonnegative integer")
+            self.status.setText("Event ID: nonnegative integer required")
         elif self.fresh:
             self.status.setText(f"{self.loaded_log} / {len(self.visible_records)} of {len(self.records)} loaded events")
 

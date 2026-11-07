@@ -480,7 +480,7 @@ class MainWindow(QMainWindow):
                 self.host_tree.group_items[new.strip()].setExpanded(False)
 
     def delete_group(self, name):
-        if QMessageBox.question(self, "Delete group", f"Delete {name}? Hosts will move to Ungrouped.",
+        if QMessageBox.question(self, "Delete group", f"Delete {name}? Hosts become ungrouped.",
                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                 QMessageBox.StandardButton.No) == QMessageBox.StandardButton.Yes:
             self.inventory_change(lambda: self.repository.delete_host_group(name))
@@ -489,7 +489,7 @@ class MainWindow(QMainWindow):
         tab = self.host_tabs_by_id[host.id]
         if tab.busy or self.session_manager.host_busy(host.id):
             return
-        if QMessageBox.question(self, "Delete host", f"Delete {host.name}? History and credentials will be kept.",
+        if QMessageBox.question(self, "Delete host", f"Delete {host.name}? History and credentials remain.",
                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
@@ -504,10 +504,10 @@ class MainWindow(QMainWindow):
     def edit_current_host(self) -> None:
         host = self.current_host()
         if host is None:
-            inline_notice(self, "Edit Host", "Select a host first.")
+            inline_notice(self, "Edit host", "No host selected.")
             return
         if self.state_for_host(host) not in {SessionState.DISCONNECTED, SessionState.ERROR}:
-            inline_notice(self, "Host in use", "Disconnect this host before editing its connection.")
+            inline_notice(self, "Host in use", "Disconnect the host before editing it.")
             return
 
         dialog = HostDialog(self.profiles, host=host, parent=self)
@@ -527,7 +527,7 @@ class MainWindow(QMainWindow):
 
     def edit_profile(self, profile):
         if self.profile_in_use(profile.id):
-            inline_notice(self, "Credential in use", "Disconnect hosts using this credential before editing it.")
+            inline_notice(self, "Credential in use", "Disconnect assigned hosts before editing it.")
             return
         dialog = CredentialDialog(self, profile=profile)
         if dialog.exec() == QDialog.DialogCode.Accepted:
@@ -535,18 +535,18 @@ class MainWindow(QMainWindow):
 
     def delete_profile(self, profile):
         if self.profile_in_use(profile.id):
-            inline_notice(self, "Credential in use", "Disconnect hosts using this credential before deleting it.")
+            inline_notice(self, "Credential in use", "Disconnect assigned hosts before deleting it.")
             return
         count = sum(host.auth_profile_id == profile.id for host in self.hosts)
-        if QMessageBox.question(self, "Delete credential", f"Delete {profile.name} and its saved password?\n"
-                                f"{count} host assignments will be cleared.",
+        if QMessageBox.question(self, "Delete credential", f"Delete {profile.name} and its saved secret?\n"
+                                f"Assignments cleared: {count}.",
                                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                                 QMessageBox.StandardButton.No) != QMessageBox.StandardButton.Yes:
             return
         try:
             self.repository.delete_credential_profile(profile.id)
         except Exception:
-            inline_notice(self, "Credential not deleted", "The database could not be updated.")
+            inline_notice(self, "Credential not deleted", "Database update failed.")
             return
         self.reload_data()
 
@@ -569,7 +569,7 @@ class MainWindow(QMainWindow):
         try:
             self.command_registry.load()
         except (ValueError, OSError) as exc:
-            inline_notice(self, "Command library not loaded", str(exc))
+            inline_notice(self, "Command library unavailable", str(exc))
             return
         dialog = self.batch_dialog = BatchDialog(self)
         try:
@@ -640,11 +640,10 @@ class MainWindow(QMainWindow):
             return
         if command.alias == "restart-service" and (host.connection_mode is ConnectionMode.WINRM or command.wmi_plan is None):
             answer = QMessageBox.question(
-                self, "Restart Remote Service",
+                self, "Restart service",
                 f"Restart {command.values['service_name']} on {host.name}?\n"
-                "This changes the remote system. A failure may leave the service stopped. "
-                + ("Dependent services will not be force-stopped." if host.connection_mode is ConnectionMode.WMI
-                   else "WinRM may also affect dependent services."),
+                + ("Dependent services are not stopped." if host.connection_mode is ConnectionMode.WMI
+                   else "Dependent services may also be affected."),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No,
             )
@@ -891,7 +890,7 @@ class MainWindow(QMainWindow):
 
     def use_fake_backend(self) -> None:
         if self.pending_operations:
-            inline_notice(self, "Operations in progress", "Wait for current operations before switching backends.")
+            inline_notice(self, "Operations active", "Finish current operations before switching backends.")
             return
         self.session_manager.disconnect_all()
         self.session_manager.use_fake_backend()
@@ -900,7 +899,7 @@ class MainWindow(QMainWindow):
         QMessageBox.information(
             self,
             "Fake backend enabled",
-            "Commands will run locally for development/testing instead of using WinRM.",
+            "Commands run locally; no remote session is used.",
         )
 
     def prompt_for_credential(self, profile: CredentialProfile) -> ResolvedCredential | None:
@@ -984,7 +983,7 @@ class MainWindow(QMainWindow):
             return
         event.ignore()
         if self.pending_operations:
-            self.statusBar().showMessage("Wait for active operations to finish before closing.")
+            self.statusBar().showMessage("Active operations must finish before closing.")
             return
         if not self.closing:
             self.closing = True
@@ -1293,7 +1292,7 @@ class HostTerminalTab(QWidget):
         self.edit_button.setEnabled(editable)
         self.auth_combo.setEnabled(editable)
         self.transfer_button.setEnabled(not busy and state is SessionState.CONNECTED and self.host.connection_mode is ConnectionMode.WINRM)
-        self.transfer_button.setToolTip("File transfers" if self.host.connection_mode is ConnectionMode.WINRM else "File transfers are unavailable on WMI/DCOM-only hosts")
+        self.transfer_button.setToolTip("File transfers" if self.host.connection_mode is ConnectionMode.WINRM else "WMI does not support file transfers")
         self.cancel_transfer.setEnabled(transferring or self.host.id in self.window.plugin_cancels)
 
     def run_command(self) -> None:
@@ -1588,7 +1587,7 @@ class CommandLibraryDialog(QDialog):
     def edit_selected(self) -> None:
         template = self.selected_template()
         if template is None:
-            inline_notice(self, "Edit Command", "Select a command first.")
+            inline_notice(self, "Edit command", "No command selected.")
             return
 
         if template.plugin is not None:
@@ -1606,7 +1605,7 @@ class CommandLibraryDialog(QDialog):
     def delete_selected(self) -> None:
         template = self.selected_template()
         if template is None:
-            inline_notice(self, "Delete Command", "Select a command first.")
+            inline_notice(self, "Delete command", "No command selected.")
             return
         try:
             self.registry.delete(template.id)
@@ -1735,7 +1734,7 @@ class CommandTemplateDialog(QDialog):
         powershell_layout.addWidget(self.script, 1)
         powershell_layout.addWidget(QLabel("Optional local script to load first"))
         powershell_layout.addWidget(module_picker)
-        powershell_tab.setToolTip("The local script runs in the persistent WinRM session and is not written remotely. Leave the editor blank to load it only.")
+        powershell_tab.setToolTip("Loads the local script into the persistent WinRM session; nothing is written remotely. Blank editor: load only.")
         self.implementation_tabs.addTab(powershell_tab, "PowerShell")
         wmi_tab = QWidget()
         wmi_tab.setObjectName("wmiQueryEditor")
@@ -1898,7 +1897,7 @@ class CommandTemplateDialog(QDialog):
             return {}
         value = parse_json(text)
         if not isinstance(value, dict):
-            raise ValueError("Parameters JSON must be an object")
+            raise ValueError("Parameters must be a JSON object")
         return value
 
 
@@ -1917,7 +1916,7 @@ class HostDialog(QDialog):
         self.name = QLineEdit(host.name if host else "")
         self.address = QLineEdit(host.address if host else "")
         self.kerberos_hostname = QLineEdit(host.kerberos_hostname if host else "")
-        self.kerberos_hostname.setPlaceholderText("server.example.com (when connecting by IP)")
+        self.kerberos_hostname.setPlaceholderText("FQDN when connecting by IP")
         self.port = QLineEdit(str(host.port if host else 5986))
         self.group_name = QLineEdit(host.group_name if host and host.group_name else "")
         if isinstance(parent, MainWindow):
@@ -1985,7 +1984,7 @@ class HostDialog(QDialog):
             if not self.name.text().strip() or not self.address.text().strip():
                 raise ValueError("Name and address are required")
             if not 1 <= int(self.port.text()) <= 65535:
-                raise ValueError("Port must be between 1 and 65535")
+                raise ValueError("Port must be 1-65535")
             if not self.namespace.text().strip():
                 raise ValueError("WMI namespace is required")
             if self.kerberos_hostname.text().strip():
@@ -2039,7 +2038,7 @@ class CredentialDialog(QDialog):
         self.password = QLineEdit()
         self.password.setEchoMode(QLineEdit.EchoMode.Password)
         if profile and not profile.prompt_for_secret:
-            self.password.setPlaceholderText("Unchanged unless replaced")
+            self.password.setPlaceholderText("Keep existing")
         self.save_password = QCheckBox("Save in database (encrypted)")
         self.save_password.setChecked(not profile or not profile.prompt_for_secret)
         self.password.setEnabled(self.save_password.isChecked())
@@ -2090,7 +2089,7 @@ class CredentialDialog(QDialog):
                                    AuthMethod.KERBEROS_AES: "AES key"}.get(method, "Password"))
         sizes = "32 or 64 hexadecimal characters" if method is AuthMethod.KERBEROS_AES else "32 hexadecimal characters"
         self.password.setPlaceholderText(sizes if method in (AuthMethod.NTLM_HASH, AuthMethod.KERBEROS_RC4, AuthMethod.KERBEROS_AES)
-                                         else "Unchanged unless replaced")
+                                         else "Keep existing")
         for field in (self.domain, self.domain_controller, self.dns_server):
             field.setEnabled(method in KERBEROS_METHODS)
 
@@ -2108,7 +2107,7 @@ class CredentialDialog(QDialog):
     def accept(self):
         profile = self.profile()
         if not profile.name or not profile.username:
-            self.validation.setText("Name and username are required.")
+            self.validation.setText("Name and username required.")
             return
         try:
             if profile.method in KERBEROS_METHODS:
@@ -2126,7 +2125,7 @@ class CredentialDialog(QDialog):
                 self.validation.setText(str(exc))
                 return
             except Exception:
-                self.validation.setText("The credential could not be saved to the database.")
+                self.validation.setText("Database save failed.")
                 return
         super().accept()
 

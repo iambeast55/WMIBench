@@ -234,7 +234,7 @@ class PluginDialog(QDialog):
             return
         tab = self.window.host_tabs_by_id.get(host.id)
         if tab is None or tab.busy or self.window.session_manager.host_busy(host.id):
-            inline_notice(self, "Host busy", "Wait for the current host operation to finish.")
+            inline_notice(self, "Host busy", "Host operation active.")
             return
         tab.command_input.setText(snapshot.manifest["alias"])
         tab.view_tabs.setCurrentIndex(0)

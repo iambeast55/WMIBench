@@ -295,7 +295,7 @@ class BatchDialog(QDialog):
                                            skip_reason=reason, approve_python=self.allow_python.isChecked() and command.plugin is not None))
             eligible = [target for target in targets if not target.skip_reason]
             if not eligible:
-                inline_notice(self, "No eligible hosts", "No selected host can run this read-only command.")
+                inline_notice(self, "No eligible hosts", "No selected host supports this command.")
                 self.refresh_preflight()
                 return
             new = [target for target in eligible if target.allow_connect]
@@ -329,7 +329,7 @@ class BatchDialog(QDialog):
                 if failure:
                     target.skip_reason = failure
                 elif credential is None or ((profile.method in (AuthMethod.NTLM, AuthMethod.NTLM_HASH, AuthMethod.BASIC) or portable_kerberos(profile)) and not credential.secret):
-                    target.skip_reason = "Credential entry cancelled or missing; no connection attempted."
+                    target.skip_reason = "Credential missing; connection not attempted."
                 else:
                     target.credential = credential
             self.runner = BatchRunner(self.manager, targets, self.concurrency.value())

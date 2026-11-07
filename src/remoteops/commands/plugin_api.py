@@ -1,4 +1,4 @@
-"""Public Python command API v3 (v1/v2 compatible). Helpers are bounded, Python is trusted."""
+"""Public Python command API v3 (v1/v2 compatible)."""
 from __future__ import annotations
 
 import json
@@ -49,7 +49,7 @@ class PluginContext:
         self._progress_count = 0
 
     def check_cancelled(self):
-        caution = (" Side effects may already have occurred; inspect the remote state before retrying."
+        caution = (" Remote state may have changed; inspect it before retrying."
                    if self._method_attempted else "")
         if self._cancel.is_set():
             raise PluginError("Python command cancelled; completed remote operations were not rolled back" + caution)

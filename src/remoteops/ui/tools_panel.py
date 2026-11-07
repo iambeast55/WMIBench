@@ -116,7 +116,7 @@ class ToolsPanel(InspectionPanel):
         self.connected = connected
         self.accounts.setItemText(0, "WMI logon inventory" if wmi else "Terminal sessions")
         self.editor.setPlaceholderText("Executable and arguments" if wmi else "PowerShell script")
-        self.editor.setToolTip("Returns a process ID, not console output" if wmi else "Remote PowerShell")
+        self.editor.setToolTip("Returns a process ID" if wmi else "Remote PowerShell")
         self.update_actions()
 
     def set_busy(self, busy):
@@ -218,7 +218,7 @@ class ToolsPanel(InspectionPanel):
         if action == "run":
             command = self.editor.toPlainText()
             if not command.strip():
-                self.status.setText("Enter a command.")
+                self.status.setText("Command required.")
                 return
             self.status.setText("Launching..." if self.wmi else "Running...")
             self.dispatch("launch" if self.wmi else "runner", {"command": command, "directory": self.path.text()}, self.ran)

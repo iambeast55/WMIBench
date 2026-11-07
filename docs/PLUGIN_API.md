@@ -294,7 +294,7 @@ Queue one `method_results` dictionary per call; an Exception in that queue raise
 at the corresponding call. `ctx.methods` records plans with `namespace`, `path`,
 `method`, numeric typed `inputs`, `outputs` and `timeout_seconds`. Query fixtures
 use `query_results`, and compiled queries are in `ctx.queries`. Fake helpers do not
-contact hosts, but arbitrary code in your tests is still trusted local Python.
+contact hosts. Test code runs as local Python.
 
 Complete action examples: `examples/plugins/service-action` and
 `examples/plugins/registry-list`, plus the v3 `scheduled-task` and `registry`

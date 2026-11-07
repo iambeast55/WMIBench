@@ -7,46 +7,46 @@ from remoteops.core.models import SessionState
 def error_summary(detail: str, state: SessionState | None = None) -> str:
     text = detail.casefold()
     if "outcome unconfirmed" in text or "side effects may" in text:
-        message = "The action's final result is unknown. Check the remote state before retrying."
+        message = "Outcome unknown. Inspect remote state before retrying."
     elif "method preparation failed; action was not sent" in text:
-        message = "Could not prepare the WMI method. No action was sent."
+        message = "WMI method preparation failed. No action sent."
     elif "no new connection was authorized" in text:
-        message = "Connection unavailable. Connect the host before running another command."
+        message = "No connection. Connect the host first."
     elif any(word in text for word in ("access denied", "access is denied", "0x80041003", "0x80070005")):
-        message = "This account lacks permission for the operation."
+        message = "Access denied."
     elif any(word in text for word in ("authentication", "logon failure", "0x8007052e")):
-        message = "Authentication failed. Check the account, domain, and saved credential."
+        message = "Authentication failed. Check the account, domain, and credential."
     elif any(word in text for word in ("invalid class", "invalid namespace", "0x80041010", "0x8004100e")):
-        message = "The host does not provide this WMI class or namespace."
+        message = "WMI class or namespace not found."
     elif "service was not found" in text:
-        message = "No unique matching service was found. Check the service name, not its display name."
+        message = "No unique service match. Use the service name, not the display name."
     elif "dependent services may be running" in text:
-        message = "Dependent services may be blocking the stop request."
+        message = "Dependent services may block the stop request."
     elif any(word in text for word in ("startservice failed", "stopservice failed", "cannot restart service")):
-        message = "Windows could not complete the service action. Check its current state."
+        message = "Service action failed. Check the current state."
     elif "event log changed during retrieval" in text:
-        message = "The event log changed while it was being read. Run the events query again."
+        message = "Event log changed during read. Rerun the query."
     elif any(word in text for word in ("invalid query", "0x80041017")):
-        message = "Invalid query. Check the class, properties, and filters."
+        message = "Invalid query. Check class, properties, and filters."
     elif any(word in text for word in ("row/size limit", "size limit", "rows;", "row limit", "row cap", "exceeded 10000")):
-        message = "Result too large. Narrow the filters or request fewer rows."
+        message = "Result too large. Narrow filters or reduce the row count."
     elif any(word in text for word in ("timed out", "time budget", "deadline", "timeout")):
-        message = "The operation took too long. Check the host or reduce the request."
+        message = "Operation timed out. Check the host or reduce the request."
     elif any(word in text for word in ("unexpected cim", "trailing wmi", "projected property", "could not be read")):
-        message = "The WMI response could not be read."
+        message = "WMI response parse failed."
     elif any(word in text for word in ("connection refused", "unreachable", "rpc server", "0x800706ba")):
-        message = "The host could not be reached. Check its address and network access."
+        message = "Host unreachable. Check the address and network access."
     elif "unknown command" in text:
-        message = "Unknown command. Choose a command from the library."
+        message = "Unknown command."
     elif "python command cancelled" in text:
-        message = "Command cancelled. Completed changes were not rolled back."
+        message = "Command cancelled. Completed changes remain."
     elif "python command failed" in text:
-        message = "Plugin failed. See the traceback below."
+        message = "Plugin failed. See traceback below."
     else:
-        message = "Failed. See the diagnostic below."
+        message = "Failed. See diagnostic below."
     message = fill(message, width=80)
     if state is SessionState.CONNECTED:
-        message += "\nSession still connected."
+        message += "\nSession connected."
     elif state is SessionState.ERROR:
-        message += "\nConnection lost. Reconnect explicitly."
+        message += "\nConnection lost. Reconnect."
     return message

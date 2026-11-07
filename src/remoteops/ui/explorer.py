@@ -199,7 +199,7 @@ class ExplorerPanel(QWidget):
                 return
             error = outcome.error or (outcome.value.stderr if outcome.value and not outcome.value.succeeded else "")
             if error:
-                self.status.setText("Request failed. See Terminal.")
+                self.status.setText("Request failed. See terminal.")
                 self.status.setToolTip(error)
                 return
             self.status.setToolTip("")

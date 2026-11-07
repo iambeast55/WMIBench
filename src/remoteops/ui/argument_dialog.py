@@ -60,13 +60,13 @@ class ArgumentDialog(QDialog):
         if initial.strip():
             try:
                 if index < 0:
-                    raise ValueError("This command is not available in this context")
+                    raise ValueError("Command unavailable in this context")
                 prepared = prepare_command(initial, self.templates)
                 if prepared.help_text:
                     raise ValueError("Help requests do not contain command argument values")
                 values = prepared.values
             except ValueError as exc:
-                self.notice.setText(f"Current arguments could not be loaded: {exc}")
+                self.notice.setText(f"Argument load failed: {exc}")
         self.command.currentIndexChanged.connect(self.change_command)
         self.build_fields(values)
 

@@ -267,7 +267,7 @@ not just in the installed wheel. Synthetic fixtures do not prove provider availa
 where = "Name=" + wql_literal(parameters["service_name"])
 ```
 
-WQL escaping differs from PowerShell escaping. QuerySpec's `where` is trusted
+WQL escaping differs from PowerShell escaping. QuerySpec's `where` is
 Python-authored syntax, not a public raw-WQL field. New operators require a compiler
 branch and tests. Result transforms are named Python handlers, never `eval`.
 

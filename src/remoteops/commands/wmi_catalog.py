@@ -85,7 +85,7 @@ def wql_literal(value: object) -> str:
 class QuerySpec:
     """A SELECT projection with CIM types (array flag is 0x2000).
 
-    where is a trusted, internally authored clause, not a raw user-input API.
+    where is an internally authored clause, not a raw user-input API.
     Bind values with wql_literal. Identifiers, CIM types, and limits are checked
     again when rendering because properties retains the proposed dict interface.
     """
