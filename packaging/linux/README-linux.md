@@ -36,6 +36,15 @@ See `docs/ADMIN_PLUGINS.md` for the task/registry plugins and Linux request-size
 wmibench
 ```
 
+Run through proxychains-ng when required:
+
+```bash
+proxychains4 wmibench
+```
+
+Enable `proxy_dns` for hostname targets. See `docs/PROXYCHAINS.md` for WMI,
+Kerberos, and WinRM port requirements.
+
 If `~/.local/bin` is not on your `PATH`, add this to your shell profile:
 
 ```bash

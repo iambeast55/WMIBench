@@ -24,6 +24,7 @@ python -m wmibench
 
 Platform-specific setup:
 [Windows](docs/WINDOWS_SETUP.md), [Linux](packaging/linux/TESTING-WMI.md).
+For Linux proxychains use, see [Proxychains](docs/PROXYCHAINS.md).
 
 ## Workspace
 

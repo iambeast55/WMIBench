@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import argparse
 import getpass
-import ipaddress
 import math
 import os
 import socket
@@ -23,6 +22,7 @@ import spnego
 from spnego.exceptions import SpnegoError
 from spnego.iov import BufferType
 
+from remoteops.core.network import proxychains_active, resolve_tcp_address
 from remoteops.remoting.rpc_probe import (
     MAX_FRAGMENT,
     RpcProbeError,
@@ -261,9 +261,7 @@ def _new_context(username: str, password: str, address: str):
 
 def validate_target(address: str, username: str, password: str,
                     port: int, timeout: float):
-    ip = ipaddress.ip_address(address)
-    if getattr(ip, "scope_id", None):
-        raise ValueError("Scoped IPv6 addresses are not supported")
+    ip = resolve_tcp_address(address, allow_hostname=proxychains_active())
     if isinstance(port, bool) or not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValueError("Port must be an integer between 1 and 65535")
     if not math.isfinite(timeout) or not 0 < timeout <= 300:

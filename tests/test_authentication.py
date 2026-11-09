@@ -31,6 +31,15 @@ class AuthenticationTests(unittest.TestCase):
             config.target("server")
         self.assertEqual(resolver.nameservers, ["192.0.2.2"])
 
+    def test_proxychains_target_resolution_uses_intercepted_system_dns(self):
+        config = DomainConnection("EXAMPLE.COM", "192.0.2.1", "192.0.2.2")
+        with patch("remoteops.core.authentication.proxychains_active", return_value=True), \
+             patch("remoteops.core.authentication.resolve_tcp_address", return_value="198.51.100.10") as resolve, \
+             patch("dns.resolver.Resolver") as resolver:
+            self.assertEqual(config.target("server"), ("server.example.com", "198.51.100.10"))
+            resolve.assert_called_once_with("server.example.com", allow_hostname=True)
+            resolver.assert_not_called()
+
     def test_invalid_secret_errors_do_not_echo_input(self):
         for method in (AuthMethod.NTLM_HASH, AuthMethod.KERBEROS_RC4, AuthMethod.KERBEROS_AES):
             with self.assertRaises(ValueError) as caught:

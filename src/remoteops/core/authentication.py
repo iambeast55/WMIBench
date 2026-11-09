@@ -5,6 +5,7 @@ import re
 from spnego import NTLMHash
 
 from remoteops.core.models import AuthMethod
+from remoteops.core.network import proxychains_active, resolve_tcp_address
 
 
 def secret_kind(method):
@@ -88,24 +89,27 @@ class DomainConnection:
         if "." not in target_name:
             target_name += "." + self.domain
         if ip is None:
-            if resolver is None:
-                from dns.resolver import Resolver
-                resolver = Resolver(configure=False)
-                resolver.nameservers = [self.dns_server or self.controller]
-            from dns.resolver import NoAnswer, NXDOMAIN
-            query_name = hostname(address)
-            if "." not in query_name:
-                query_name += "." + self.domain
-            for record_type in ("A", "AAAA"):
-                try:
-                    records = resolver.resolve(query_name,
-                                               record_type, lifetime=5, search=False)
-                    ip = str(ipaddress.ip_address(str(records[0])))
-                    break
-                except (NoAnswer, NXDOMAIN):
-                    continue
+            if proxychains_active():
+                ip = str(resolve_tcp_address(target_name, allow_hostname=True))
+            else:
+                if resolver is None:
+                    from dns.resolver import Resolver
+                    resolver = Resolver(configure=False)
+                    resolver.nameservers = [self.dns_server or self.controller]
+                from dns.resolver import NoAnswer, NXDOMAIN
+                query_name = hostname(address)
+                if "." not in query_name:
+                    query_name += "." + self.domain
+                for record_type in ("A", "AAAA"):
+                    try:
+                        records = resolver.resolve(query_name,
+                                                   record_type, lifetime=5, search=False)
+                        ip = str(ipaddress.ip_address(str(records[0])))
+                        break
+                    except (NoAnswer, NXDOMAIN):
+                        continue
             if ip is None:
-                raise ValueError("No address found in the configured domain DNS.")
+                raise ValueError("No address found for the configured host.")
         return target_name, ip
 
 
