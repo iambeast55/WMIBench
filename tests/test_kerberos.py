@@ -46,8 +46,7 @@ def mutual_reply(context, *, sequence=0, wrong_time=False):
 def server_message(key, data, sequence=0, rpc=False):
     if key.enctype == 23:
         wrap = gssapi.GSSAPI(crypto._enctype_table[23])
-        encrypted, header = (wrap.GSS_Wrap(key, data, sequence, direction="accept") if rpc else
-                              wrap.GSS_Wrap_LDAP(key, data, sequence, direction="accept"))
+        encrypted, header = wrap.GSS_Wrap(key, data, sequence, direction="accept")
         return header, encrypted
     extra = -len(data) % 16
     header = struct.pack(">HBBHHQ", 0x0504, 7, 255, extra, 0, sequence)

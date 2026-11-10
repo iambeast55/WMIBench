@@ -143,7 +143,7 @@ class DcomSessionTests(unittest.TestCase):
             with self.assertRaises(CommandValidationError):
                 manager.run_command(self.host, "Get-Process")
             help_result = manager.run_command_with_credential(self.host, "disk -h")
-            self.assertIn("Linux experimental DCOM", help_result.stdout)
+            self.assertNotIn("Linux experimental DCOM", help_result.stdout)
             credentials.assert_not_called()
             self.assertEqual(manager.states(), {})
 

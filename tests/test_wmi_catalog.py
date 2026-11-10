@@ -35,7 +35,7 @@ class CatalogTests(unittest.TestCase):
         for template in BUILTIN_TEMPLATES:
             with self.subTest(alias=template.alias):
                 self.assertTrue(prepare_command(template.alias).native_wmi)
-                self.assertIn("WMI behavior:", command_help(template))
+                self.assertNotIn("WMI behavior:", command_help(template))
                 self.assertIn(template.alias, catalog.WMI_NOTES)
 
     def test_all_simple_queries_decode_types_and_execute(self):

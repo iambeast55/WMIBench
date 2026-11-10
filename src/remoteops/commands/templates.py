@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from remoteops.core.models import CommandTemplate
-from remoteops.commands.wmi_catalog import WMI_ALIASES, WMI_NOTES
+from remoteops.commands.wmi_catalog import WMI_ALIASES
 from remoteops.commands.wmi_definitions import WmiQueryPlan, compile_definition, validate_definition
 
 
@@ -584,32 +584,9 @@ def command_help(template: CommandTemplate) -> str:
         if "min" in spec or "max" in spec:
             details += f"; range: {spec.get('min', '*')}..{spec.get('max', '*')}"
         lines.append(f"  --{name.replace('_', '-')} VALUE    {details}")
-    builtin = TEMPLATES_BY_ALIAS.get(template.alias.lower())
-    native = builtin is not None and builtin.script == template.script and template.alias in WMI_ALIASES
-    lines += ["", "Backends: " + ", ".join(command_backends(template)),
-              "Changes remote system: " + (("yes (declared)" if template.plugin.modifies else "no (declared)") if template.plugin is not None
-                                           else "no (WMI query)" if template.wmi is not None and not template.script.strip()
-                                           else "yes" if template.alias == "restart-service" or template.parameters.get("_modifies")
-                                           else "no" if builtin else "unspecified")]
-    if template.wmi is not None:
-        definition = template.wmi
-        lines.append("WMI clients: Windows native COM; Linux experimental DCOM (NTLM).")
-        lines.append(f"WMI query: root/cimv2 / {definition['class']} (read-only SELECT)")
-        lines.append("WMI fields: " + ", ".join(f"{name}: {kind}" for name, kind in definition["properties"].items()))
-        lines.append(f"WMI limits: {definition.get('limits', {}).get('rows', 1000)} rows, "
-                     f"{definition.get('limits', {}).get('timeout_seconds', 30)} seconds; no partial results.")
-    elif native:
-        lines.append("WMI clients: Windows native COM; Linux experimental DCOM (NTLM).")
-        lines.append("WMI behavior: " + WMI_NOTES.get(template.alias, "Native provider fields."))
     default_example = template.alias + "".join(f" --{key.replace('_', '-')} {spec['default']}" for key, spec in schema.items() if "default" in spec)
     examples = template.parameters.get("_examples", [default_example])
     lines += ["", "Examples:", *[f"  {example}" for example in examples]]
-    if template.plugin is not None:
-        lines += ["", "Python command (not sandboxed).",
-                  "Declares remote changes: " + str(template.plugin.modifies).lower(),
-                  "Version: " + template.plugin.digest[:12],
-                  "Source: " + template.plugin.folder,
-                  "Cancellation and deadlines are cooperative; helpers never retry."]
     return "\n".join(lines)
 
 

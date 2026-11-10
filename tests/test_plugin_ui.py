@@ -76,7 +76,7 @@ class PluginUiTests(unittest.TestCase):
         manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
         self.registry.plugins.enable(self.registry.plugins.validate(self.folder))
         prepared = self.registry.prepare("my-bios")
-        self.assertIn("Changes remote system: yes (declared)", self.registry.prepare("my-bios -h").help_text)
+        self.assertNotIn("Changes remote system:", self.registry.prepare("my-bios -h").help_text)
         manager = Mock()
         manager.prepare.return_value = prepared
         window = SimpleNamespace(session_manager=manager, start_worker=Mock(), profile_for_host=Mock(),

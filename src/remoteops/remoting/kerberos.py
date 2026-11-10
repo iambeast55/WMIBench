@@ -204,10 +204,7 @@ class KerberosContext:
         if not self.complete:
             raise KerberosFailure("Kerberos authentication is incomplete.")
         provider = gssapi.GSSAPI(crypto._enctype_table[self.key.enctype])
-        if self.key.enctype == 23 and not rpc:
-            encrypted, header = provider.GSS_Wrap_LDAP(self.key, data, self.send_sequence)
-        else:
-            encrypted, header = provider.GSS_Wrap(self.key, data, self.send_sequence)
+        encrypted, header = provider.GSS_Wrap(self.key, data, self.send_sequence)
         self.send_sequence += 1
         return header, encrypted
 
@@ -259,7 +256,11 @@ def unwrap_message(key, header, data, sequence, *, rpc=False):
         wrapper = GSSAPI(header + data)
         if wrapper["OID"] != TypesMech["KRB5 - Kerberos 5"]:
             raise ValueError("Invalid RC4 GSS mechanism")
-        token, data = wrapper["Payload"][:32], wrapper["Payload"][32:]
+        payload = wrapper["Payload"]
+        if len(header) > 13:
+            token = payload
+        else:
+            token, data = payload[:32], payload[32:]
     if len(token) != 32 or token[:8] != bytes.fromhex("020111001000ffff"):
         raise ValueError("Invalid RC4 GSS token")
     digest = lambda key, value: hmac.new(key, value, hashlib.md5).digest()
@@ -277,7 +278,8 @@ def unwrap_message(key, header, data, sequence, *, rpc=False):
     plaintext = plaintext[8:]
     if not rpc:
         padding = plaintext[-1] if plaintext else 0
-        if not 1 <= padding <= 8 or plaintext[-padding:] != bytes([padding]) * padding:
-            raise ValueError("Invalid GSS padding")
-        plaintext = plaintext[:-padding]
+        if 1 <= padding <= 7:
+            if plaintext[-padding:] != bytes([padding]) * padding:
+                raise ValueError("Invalid GSS padding")
+            plaintext = plaintext[:-padding]
     return plaintext

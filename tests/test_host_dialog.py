@@ -42,6 +42,14 @@ class HostDialogTests(unittest.TestCase):
                 self.assertIs(loaded.connection_mode, mode)
                 self.assertEqual(loaded.endpoint, host.endpoint)
 
+    def test_new_winrm_hosts_default_to_http(self):
+        dialog = self.dialog()
+        dialog.name.setText("server-01")
+        dialog.address.setText("192.0.2.10")
+        host = dialog.host()
+        self.assertEqual(host.port, 5985)
+        self.assertEqual(host.transport.value, "http")
+
     def test_edit_hosts_switches_and_persists_mode(self):
         host = self.repository.save_host(Host(name="server-01", address="192.0.2.10"))
         for mode in (ConnectionMode.WMI, ConnectionMode.WINRM):

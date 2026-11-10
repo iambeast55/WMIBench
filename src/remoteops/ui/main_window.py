@@ -1917,14 +1917,14 @@ class HostDialog(QDialog):
         self.address = QLineEdit(host.address if host else "")
         self.kerberos_hostname = QLineEdit(host.kerberos_hostname if host else "")
         self.kerberos_hostname.setPlaceholderText("FQDN when connecting by IP")
-        self.port = QLineEdit(str(host.port if host else 5986))
+        self.port = QLineEdit(str(host.port if host else 5985))
         self.group_name = QLineEdit(host.group_name if host and host.group_name else "")
         if isinstance(parent, MainWindow):
             from PySide6.QtWidgets import QCompleter
             self.group_name.setCompleter(QCompleter(parent.repository.list_host_groups(), self))
         self.tags = QLineEdit(", ".join(host.tags) if host else "")
         self.transport = QComboBox()
-        self.transport.addItems([Transport.HTTPS.value, Transport.HTTP.value])
+        self.transport.addItems([Transport.HTTP.value, Transport.HTTPS.value])
         if host:
             self.transport.setCurrentText(host.transport.value)
 
@@ -2000,7 +2000,7 @@ class HostDialog(QDialog):
             host.name = self.name.text().strip()
             host.address = self.address.text().strip()
             host.kerberos_hostname = self.kerberos_hostname.text().strip()
-            host.port = int(self.port.text().strip() or "5986")
+            host.port = int(self.port.text().strip() or "5985")
             host.transport = Transport(self.transport.currentText())
             host.auth_profile_id = self.profile.currentData()
             host.group_name = self.group_name.text().strip() or None
@@ -2014,7 +2014,7 @@ class HostDialog(QDialog):
             name=self.name.text().strip(),
             address=self.address.text().strip(),
             kerberos_hostname=self.kerberos_hostname.text().strip(),
-            port=int(self.port.text().strip() or "5986"),
+            port=int(self.port.text().strip() or "5985"),
             transport=Transport(self.transport.currentText()),
             auth_profile_id=self.profile.currentData(),
             group_name=self.group_name.text().strip() or None,

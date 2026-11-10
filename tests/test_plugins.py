@@ -74,7 +74,7 @@ class PluginTests(unittest.TestCase):
     def test_validation_activation_and_help_never_execute_source(self):
         snapshot = self.enable('raise AssertionError("must not execute")\ndef run(ctx, args):\n    return []\n')
         self.assertEqual(self.registry.prepare("my-bios").plugin, snapshot)
-        self.assertIn("Python command", self.registry.prepare("my-bios -h").help_text)
+        self.assertNotIn("Python command", self.registry.prepare("my-bios -h").help_text)
 
     def test_scaffold_offline(self):
         snapshot = self.enable()
@@ -483,7 +483,7 @@ class PluginTests(unittest.TestCase):
         for alias in ("scheduled-task", "registry"):
             folder = self.store.install(examples / alias)
             self.store.enable(self.store.validate(folder))
-            self.assertIn("Changes remote system: yes", self.registry.prepare(alias + " -h").help_text)
+            self.assertNotIn("Changes remote system:", self.registry.prepare(alias + " -h").help_text)
         prepared = self.registry.prepare('registry set "SOFTWARE\\WMIBenchLab" --name Flag --type DWORD --data 0xffffffff')
         ctx = FakeContext(method_results=[{"ReturnValue": 0}], modifies_remote=True)
         self.assertEqual(execute_plugin(prepared.plugin, ctx, prepared.values)[0]["ReturnValue"], 0)

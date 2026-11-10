@@ -48,8 +48,8 @@ class Host:
     name: str
     address: str
     id: str = field(default_factory=new_id)
-    port: int = 5986
-    transport: Transport = Transport.HTTPS
+    port: int = 5985
+    transport: Transport = Transport.HTTP
     auth_profile_id: str | None = None
     group_name: str | None = None
     tags: list[str] = field(default_factory=list)

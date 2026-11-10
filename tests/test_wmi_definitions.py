@@ -41,8 +41,8 @@ class DefinitionTests(unittest.TestCase):
                     self.assertEqual(decode_instance(instance_fixture(spec.class_name, spec.properties, row),
                                                      spec.class_name, spec.properties), row)
                     help_text = prepare_command(template.alias + " -h", [template]).help_text
-                    self.assertIn("Backends: WMI/DCOM", help_text)
-                    self.assertIn("WMI limits:", help_text)
+                    self.assertNotIn("Backends:", help_text)
+                    self.assertNotIn("WMI limits:", help_text)
 
     def test_filter_binding_escapes_values_and_keeps_query_structure(self):
         template = CommandRegistry._parse((EXAMPLES / "service-status.json").read_bytes())[1][0]
