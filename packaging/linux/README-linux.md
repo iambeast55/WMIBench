@@ -1,6 +1,9 @@
 # WMIBench Linux Distribution
 
 This package installs WMIBench into a per-user Linux environment.
+Ubuntu and Debian are supported. The standalone x86_64 bundle targets glibc
+2.35 or newer (Ubuntu 22.04+ and Debian 12+). Use the source installer for
+older Debian releases.
 
 ## Install
 

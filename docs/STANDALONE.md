@@ -44,8 +44,9 @@ The single executable extracts its bundled runtime into a temporary directory at
 First startup may take longer and needs free temporary disk space. Linux needs a
 desktop session, a glibc-based distribution and Qt's normal system graphics/X11
 libraries; it is not a universal static binary for every Linux distribution.
-The CI baseline is Ubuntu 22.04 x64 (glibc 2.35); test older/other distributions separately.
-Alpine/musl and ARM are not covered by the supplied x64 CI builds.
+The CI baseline is Ubuntu 22.04 x64 (glibc 2.35). The x64 bundle targets glibc
+2.35 or newer, including Ubuntu 22.04+ and Debian 12+. Alpine/musl and ARM are
+not covered by the supplied builds. Use the source installer for older Debian.
 Windows artifacts are unsigned previews; organizational application-control policies
 may require signing/approval. Do not disable endpoint protection to run a build.
 
