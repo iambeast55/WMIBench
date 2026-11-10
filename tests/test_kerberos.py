@@ -1,7 +1,6 @@
 import asyncio
 import base64
 import struct
-import sys
 import time
 import unittest
 from datetime import datetime, timezone, timedelta
@@ -119,8 +118,7 @@ class KerberosTests(unittest.TestCase):
                 self.assertEqual(factory.call_args.args[1].ip, "192.0.2.1")
                 self.assertEqual(client.get_TGS.call_args.args[0].service, "HTTP")
                 self.assertEqual(client.get_TGS.call_args.args[0].username, "server.example.com")
-                self.assertEqual(client.get_TGS.call_args.kwargs,
-                                 {"is_linux": sys.platform.startswith("linux")})
+                self.assertEqual(client.get_TGS.call_args.kwargs, {})
             provider.close()
             self.assertIsNone(provider.secret)
             self.assertFalse(provider.tickets)

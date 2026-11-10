@@ -5,7 +5,6 @@ import asyncio
 import hashlib
 import hmac
 import struct
-import sys
 from datetime import datetime, timezone, timedelta
 
 from Cryptodome.Cipher import ARC4
@@ -96,9 +95,7 @@ class TicketProvider:
                 raise KerberosFailure("Kerberos TGT decryption failed for the supplied password.") from None
         spn = KerberosSPN.from_spn(f"{service}/{self.hostname}@{self.realm}")
         try:
-            tgs, part, key = await client.get_TGS(
-                spn, is_linux=sys.platform.startswith("linux")
-            )
+            tgs, part, key = await client.get_TGS(spn)
         except InvalidChecksum:
             raise KerberosFailure(
                 f"Kerberos service ticket decryption failed for {service}/{self.hostname}."
