@@ -18,7 +18,19 @@ if [[ -d "$SOURCE/plugins" ]]; then
 fi
 
 chmod +x "$INSTALL_DIR/wmibench" "$INSTALL_DIR/run.sh" 2>/dev/null || true
-ln -sfn "$INSTALL_DIR/run.sh" "$BIN_DIR/wmibench"
+
+# Use an absolute target here. A symlink to run.sh makes run.sh resolve its
+# root to BIN_DIR and execute the symlink again.
+if [[ -L "$BIN_DIR/wmibench" ]]; then
+    rm "$BIN_DIR/wmibench"
+fi
+cat > "$BIN_DIR/wmibench" <<EOF
+#!/usr/bin/env bash
+set -euo pipefail
+export WMIBENCH_DATA_DIR="$INSTALL_DIR"
+exec "$INSTALL_DIR/wmibench" "\$@"
+EOF
+chmod +x "$BIN_DIR/wmibench"
 
 echo "WMIBench installed to $INSTALL_DIR"
 echo "Run: $BIN_DIR/wmibench"
