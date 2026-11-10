@@ -9,7 +9,7 @@ command -v "$PYTHON" >/dev/null 2>&1 || {
     exit 1
 }
 
-"$PYTHON" -c 'import sys; raise SystemExit("Python 3.12+ is required") if sys.version_info < (3, 12) else None'
+"$PYTHON" -c 'import sys; sys.version_info >= (3, 12) or sys.exit("Python 3.12+ is required")'
 
 "$PYTHON" -m venv "$ROOT/.venv"
 "$ROOT/.venv/bin/python" -m pip install --upgrade pip
