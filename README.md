@@ -62,9 +62,7 @@ Tab or Enter accepts a suggestion; accepting it does not run the command.
 Up/Down recalls earlier commands when the suggestion list is closed.
 
 Explorer class inspection works with native Windows WMI and with WinRM from either
-client OS. The DCOM transport (Linux WMI, and Windows WMI with keys/hashes
-or an explicit DC) currently supports namespace browsing only. The explorer does
-not invoke methods; copied method examples can be used in a plugin.
+client OS. Copied method examples can be used in a plugin.
 See [Explorer](docs/EXPLORER.md).
 
 ## Plugins
@@ -81,22 +79,5 @@ connection; plugin code also has access to local files and application data.
 - [Scheduled-task and registry plugins](docs/ADMIN_PLUGINS.md)
 - [Built-in WMI command development](docs/ADDING_WMI_COMMANDS.md)
 
-## Connections And Limits
-
-Recoverable command errors leave healthy sessions connected. Broken transports
-require reconnecting. Failed operations are not automatically replayed.
-
-WMI process launches return a process ID, not console output. File transfers and
-terminal-session actions require WinRM. No WMI operation silently switches transports.
-The Linux DCOM backend is experimental; Connect/sysinfo have been user-verified,
-but expanded metadata and method support need further target testing.
-
-Credentials support Kerberos with a password, RC4 key, or AES key, and NTLM with a
-password or NT hash. Kerberos profiles take a domain and DC IP; DNS queries use the
-DC or an optional DNS server without changing system settings. See [Authentication](docs/AUTHENTICATION.md)
-for connection examples and the live-testing limits of this preview.
-
-Saved passwords and keys are encrypted in SQLite. The encryption key is protected by DPAPI
-on Windows or file permissions on Linux. Back up both the database and key;
-copying the database alone does not transfer saved credentials to another account.
-See [Credentials](docs/CREDENTIALS.md).
+Authentication and credential storage are documented in
+[Authentication](docs/AUTHENTICATION.md) and [Credentials](docs/CREDENTIALS.md).
