@@ -47,5 +47,5 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: WMIBench-${{ runner.os }}-x86_64
-          path: dist/WMIBench-*/
+          path: dist/WMIBench-${{ runner.os == 'Windows' && 'windows' || 'linux' }}-x86_64/
           if-no-files-found: error
