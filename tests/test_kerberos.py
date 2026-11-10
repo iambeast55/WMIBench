@@ -1,6 +1,7 @@
 import asyncio
 import base64
 import struct
+import sys
 import time
 import unittest
 from datetime import datetime, timezone, timedelta
@@ -10,6 +11,7 @@ from unittest.mock import AsyncMock, Mock, patch
 from impacket.krb5 import crypto, gssapi
 from impacket.spnego import GSSAPI, SPNEGO_NegTokenResp, TypesMech
 from minikerberos.protocol.asn1_structs import AP_REQ, AP_REP, Authenticator, EncAPRepPart, Ticket
+from minikerberos.protocol.encryption import InvalidChecksum
 
 from remoteops.core.credentials import ResolvedCredential
 from remoteops.core.models import AuthMethod, CredentialProfile, Host
@@ -117,9 +119,35 @@ class KerberosTests(unittest.TestCase):
                 self.assertEqual(factory.call_args.args[1].ip, "192.0.2.1")
                 self.assertEqual(client.get_TGS.call_args.args[0].service, "HTTP")
                 self.assertEqual(client.get_TGS.call_args.args[0].username, "server.example.com")
+                self.assertEqual(client.get_TGS.call_args.kwargs,
+                                 {"is_linux": sys.platform.startswith("linux")})
             provider.close()
             self.assertIsNone(provider.secret)
             self.assertFalse(provider.tickets)
+
+    def test_password_auth_retries_no_preauth_asrep_with_empty_aes_salt(self):
+        profile = CredentialProfile("test", "EXAMPLE\\user", method=AuthMethod.KERBEROS,
+                                    domain="example.com", domain_controller="192.0.2.1")
+        host = Host("server", "192.0.2.10", kerberos_hostname="server.example.com")
+        provider = TicketProvider(host, profile, ResolvedCredential(profile.username, "fixture-password"))
+        key = provider_fixture().ticket()[1]
+        ticket = Ticket.load(provider_fixture().ticket()[0]).native
+        ticket["sname"]["name-string"][0] = "HTTP"
+        first = Mock()
+        first.get_TGT = AsyncMock(side_effect=InvalidChecksum("ciphertext integrity failure"))
+        second = Mock()
+        second.get_TGT = AsyncMock()
+        second.get_TGS = AsyncMock(return_value=(
+            {"ticket": ticket},
+            {"endtime": datetime.now(timezone.utc) + timedelta(hours=1)},
+            key,
+        ))
+        with patch("remoteops.remoting.kerberos.AIOKerberosClient", side_effect=[first, second]) as factory:
+            provider.ticket("HTTP")
+        self.assertEqual(factory.call_count, 2)
+        fallback_credential = factory.call_args_list[1].args[0]
+        self.assertTrue(fallback_credential.kerberos_key_aes_256)
+        second.get_TGT.assert_awaited_once_with(override_etype=[18, 17, 23])
 
     def test_mapping_preserves_tls_name_and_does_not_change_shared_pool_classes(self):
         from urllib3.poolmanager import pool_classes_by_scheme

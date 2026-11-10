@@ -5,6 +5,7 @@ import asyncio
 import hashlib
 import hmac
 import struct
+import sys
 from datetime import datetime, timezone, timedelta
 
 from Cryptodome.Cipher import ARC4
@@ -15,6 +16,7 @@ from minikerberos.common.creds import KerberosCredential
 from minikerberos.common.spn import KerberosSPN
 from minikerberos.common.target import KerberosTarget
 from minikerberos.protocol.asn1_structs import AP_REQ, AP_REP, Authenticator, EncAPRepPart, Ticket
+from minikerberos.protocol.encryption import Enctype, InvalidChecksum, string_to_key
 from minikerberos.protocol.errors import KerberosError
 from minikerberos.protocol.ticketutils import construct_apreq_from_ticket
 
@@ -74,10 +76,33 @@ class TicketProvider:
         else:
             cred.password = self.secret
             etypes = [18, 17, 23]
-        client = AIOKerberosClient(cred, KerberosTarget(self.domain.controller, timeout=10))
-        await client.get_TGT(override_etype=etypes)
+        target = KerberosTarget(self.domain.controller, timeout=10)
+        client = AIOKerberosClient(cred, target)
+        try:
+            await client.get_TGT(override_etype=etypes)
+        except InvalidChecksum:
+            # minikerberos derives an AES key with the normal principal salt.
+            # AD can return an AS-REP without pre-authentication, in which case
+            # the AS-REP key uses the empty salt. Retry only password auth; raw
+            # keys and hashes have no alternate derivation to try.
+            if self.method != AuthMethod.KERBEROS:
+                raise
+            fallback = KerberosCredential()
+            fallback.username, fallback.domain = self.username, self.realm
+            if 18 in etypes:
+                fallback.kerberos_key_aes_256 = string_to_key(
+                    Enctype.AES256, self.secret, b""
+                ).contents.hex()
+            if 17 in etypes:
+                fallback.kerberos_key_aes_128 = string_to_key(
+                    Enctype.AES128, self.secret, b""
+                ).contents.hex()
+            client = AIOKerberosClient(fallback, target)
+            await client.get_TGT(override_etype=etypes)
         spn = KerberosSPN.from_spn(f"{service}/{self.hostname}@{self.realm}")
-        tgs, part, key = await client.get_TGS(spn, override_etype=[18, 17, 23])
+        tgs, part, key = await client.get_TGS(
+            spn, is_linux=sys.platform.startswith("linux")
+        )
         requested = [service.casefold(), self.hostname.casefold()]
         returned = [value.casefold() for value in tgs["ticket"]["sname"]["name-string"]]
         if returned != requested or key.enctype not in (17, 18, 23):
