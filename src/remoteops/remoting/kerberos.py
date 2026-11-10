@@ -16,7 +16,7 @@ from minikerberos.common.creds import KerberosCredential
 from minikerberos.common.spn import KerberosSPN
 from minikerberos.common.target import KerberosTarget
 from minikerberos.protocol.asn1_structs import AP_REQ, AP_REP, Authenticator, EncAPRepPart, Ticket
-from minikerberos.protocol.encryption import Enctype, InvalidChecksum, string_to_key
+from minikerberos.protocol.encryption import InvalidChecksum
 from minikerberos.protocol.errors import KerberosError
 from minikerberos.protocol.ticketutils import construct_apreq_from_ticket
 
@@ -81,28 +81,28 @@ class TicketProvider:
         try:
             await client.get_TGT(override_etype=etypes)
         except InvalidChecksum:
-            # minikerberos derives an AES key with the normal principal salt.
-            # AD can return an AS-REP without pre-authentication, in which case
-            # the AS-REP key uses the empty salt. Retry only password auth; raw
-            # keys and hashes have no alternate derivation to try.
             if self.method != AuthMethod.KERBEROS:
                 raise
+            # Password-based AES AS-REP decryption is ambiguous for accounts
+            # without pre-authentication. Request an RC4 TGT instead; the
+            # password is converted to the account's NT key by minikerberos.
             fallback = KerberosCredential()
             fallback.username, fallback.domain = self.username, self.realm
-            if 18 in etypes:
-                fallback.kerberos_key_aes_256 = string_to_key(
-                    Enctype.AES256, self.secret, b""
-                ).contents.hex()
-            if 17 in etypes:
-                fallback.kerberos_key_aes_128 = string_to_key(
-                    Enctype.AES128, self.secret, b""
-                ).contents.hex()
+            fallback.password = self.secret
             client = AIOKerberosClient(fallback, target)
-            await client.get_TGT(override_etype=etypes)
+            try:
+                await client.get_TGT(override_etype=[23])
+            except InvalidChecksum:
+                raise KerberosFailure("Kerberos TGT decryption failed for the supplied password.") from None
         spn = KerberosSPN.from_spn(f"{service}/{self.hostname}@{self.realm}")
-        tgs, part, key = await client.get_TGS(
-            spn, is_linux=sys.platform.startswith("linux")
-        )
+        try:
+            tgs, part, key = await client.get_TGS(
+                spn, is_linux=sys.platform.startswith("linux")
+            )
+        except InvalidChecksum:
+            raise KerberosFailure(
+                f"Kerberos service ticket decryption failed for {service}/{self.hostname}."
+            ) from None
         requested = [service.casefold(), self.hostname.casefold()]
         returned = [value.casefold() for value in tgs["ticket"]["sname"]["name-string"]]
         if returned != requested or key.enctype not in (17, 18, 23):

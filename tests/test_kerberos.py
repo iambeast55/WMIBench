@@ -125,7 +125,7 @@ class KerberosTests(unittest.TestCase):
             self.assertIsNone(provider.secret)
             self.assertFalse(provider.tickets)
 
-    def test_password_auth_retries_no_preauth_asrep_with_empty_aes_salt(self):
+    def test_password_auth_retries_no_preauth_asrep_with_rc4(self):
         profile = CredentialProfile("test", "EXAMPLE\\user", method=AuthMethod.KERBEROS,
                                     domain="example.com", domain_controller="192.0.2.1")
         host = Host("server", "192.0.2.10", kerberos_hostname="server.example.com")
@@ -146,8 +146,8 @@ class KerberosTests(unittest.TestCase):
             provider.ticket("HTTP")
         self.assertEqual(factory.call_count, 2)
         fallback_credential = factory.call_args_list[1].args[0]
-        self.assertTrue(fallback_credential.kerberos_key_aes_256)
-        second.get_TGT.assert_awaited_once_with(override_etype=[18, 17, 23])
+        self.assertEqual(fallback_credential.password, "fixture-password")
+        second.get_TGT.assert_awaited_once_with(override_etype=[23])
 
     def test_mapping_preserves_tls_name_and_does_not_change_shared_pool_classes(self):
         from urllib3.poolmanager import pool_classes_by_scheme
