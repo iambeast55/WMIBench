@@ -10,7 +10,7 @@ Use `python packaging/standalone/build.py --bundle` on the target operating syst
 This creates `dist/WMIBench-windows-x86_64/` or `dist/WMIBench-linux-x86_64/`.
 Each bundle contains the executable, launcher, installer, `plugins/`, and a
 portable marker. Run `run.cmd`/`run.ps1` on Windows or `./run.sh` on Linux.
-The bundle keeps `commands.json`, `remoteops.sqlite3`, and plugins in that same
+The bundle keeps `commands.json`, `wmibench.sqlite3`, and plugins in that same
 folder. The first run creates the command library with the built-in commands.
 
 Windows installation is optional:
@@ -33,8 +33,8 @@ The Linux executable must be built on Linux; the Windows build cannot produce it
 - Linux x64: run `dist/WMIBench-linux-x86_64/run.sh`.
   The bundle preserves executable permissions and includes the install script.
 - Close the old app and replace the executable to update. Do not remove the data folder.
-- Windows data/plugins stay in `%USERPROFILE%\AppData\Local\RemoteOps`;
-  Linux uses `~/.local/share/RemoteOps`. Existing hosts, encrypted credentials and
+- Windows data/plugins stay in `%USERPROFILE%\AppData\Local\WMIBench`;
+  Linux uses `~/.local/share/WMIBench`. Existing hosts, encrypted credentials and
   history are reused under the same OS account. Launching the executable does not
   copy or delete an existing Python installation.
 - Plugins remain ordinary editable folders under that data directory, not inside the

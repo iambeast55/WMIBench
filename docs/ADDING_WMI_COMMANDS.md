@@ -311,20 +311,20 @@ From the repository root on Windows:
 ```powershell
 $env:PYTHONPATH = 'src'
 .\.venv\Scripts\python.exe -m unittest discover -s tests -q
-.\packaging\linux\build_tarball.ps1 -PackageName remoteops-linux-console-fixes-preview
+.\packaging\linux\build_tarball.ps1 -PackageName wmibench-linux-console-fixes-preview
 ```
 
 On Ubuntu, close WMIBench and extract outside the install directory:
 
 ```bash
-tar -xzf remoteops-linux-console-fixes-preview.tar.gz
-cd remoteops-linux-console-fixes-preview
+tar -xzf wmibench-linux-console-fixes-preview.tar.gz
+cd wmibench-linux-console-fixes-preview
 bash packaging/linux/install.sh
-~/.local/bin/remoteops
+~/.local/bin/wmibench
 ```
 
 The archive includes this guide and tests. User data stays in
-`~/.local/share/RemoteOps`. Standalone diagnostic tools are separate from the GUI package.
+`~/.local/share/WMIBench`. Standalone diagnostic tools are separate from the GUI package.
 Start with read-only queries and idle/reconnect checks. Use only a deliberately
 chosen lab service for restart testing.
 

@@ -484,7 +484,7 @@ class PluginTests(unittest.TestCase):
             folder = self.store.install(examples / alias)
             self.store.enable(self.store.validate(folder))
             self.assertIn("Changes remote system: yes", self.registry.prepare(alias + " -h").help_text)
-        prepared = self.registry.prepare('registry set "SOFTWARE\\RemoteOpsLab" --name Flag --type DWORD --data 0xffffffff')
+        prepared = self.registry.prepare('registry set "SOFTWARE\\WMIBenchLab" --name Flag --type DWORD --data 0xffffffff')
         ctx = FakeContext(method_results=[{"ReturnValue": 0}], modifies_remote=True)
         self.assertEqual(execute_plugin(prepared.plugin, ctx, prepared.values)[0]["ReturnValue"], 0)
         self.assertEqual(ctx.methods[0].inputs["uValue"], (19, 2**32-1))

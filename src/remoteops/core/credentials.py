@@ -12,7 +12,8 @@ from remoteops.core.models import CredentialProfile
 from remoteops.core.authentication import secret_kind, validate_secret
 
 
-SERVICE_NAME = "RemoteOps"
+SERVICE_NAME = "WMIBench"
+LEGACY_SERVICE_NAME = "RemoteOps"
 
 
 @dataclass(frozen=True, slots=True)
@@ -44,7 +45,7 @@ class CredentialStore:
                 key = Fernet.generate_key()
                 if os.name == "nt":
                     import win32crypt
-                    key = win32crypt.CryptProtectData(key, "RemoteOps credentials", None, None, None, 1)
+                    key = win32crypt.CryptProtectData(key, "WMIBench credentials", None, None, None, 1)
                 # Exclusive creation never replaces a key used by another app instance.
                 try:
                     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
@@ -95,6 +96,8 @@ class CredentialStore:
             return None
         try:
             secret = self._keyring.get_password(SERVICE_NAME, profile.id)
+            if not secret:
+                secret = self._keyring.get_password(LEGACY_SERVICE_NAME, profile.id)
         except Exception as exc:
             raise RuntimeError("The legacy keychain is unavailable. Edit this credential and save its password in the database.") from exc
         if secret and self.repository:

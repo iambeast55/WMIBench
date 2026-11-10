@@ -12,7 +12,7 @@ if ($Source.TrimEnd('\') -ieq $Target.TrimEnd('\')) {
 }
 
 New-Item -ItemType Directory -Force -Path $Target | Out-Null
-$preserve = @("remoteops.sqlite3", "commands.json", "commands.json.v1.bak")
+$preserve = @("wmibench.sqlite3", "wmibench.key", "remoteops.sqlite3", "remoteops.key", "commands.json", "commands.json.v1.bak")
 Get-ChildItem -LiteralPath $Source -Force |
     Where-Object { $_.Name -notin $preserve -and $_.Name -ne "plugins" } |
     Copy-Item -Destination $Target -Recurse -Force

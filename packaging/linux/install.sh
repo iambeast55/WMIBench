@@ -3,8 +3,8 @@ set -euo pipefail
 
 APP_NAME="WMIBench"
 # Retain the install location and desktop ID for in-place upgrades.
-INSTALL_DIR="${WMIBENCH_INSTALL_DIR:-${REMOTEOPS_INSTALL_DIR:-$HOME/.local/share/remoteops}}"
-BIN_DIR="${WMIBENCH_BIN_DIR:-${REMOTEOPS_BIN_DIR:-$HOME/.local/bin}}"
+INSTALL_DIR="${WMIBENCH_INSTALL_DIR:-$HOME/.local/share/WMIBench-app}"
+BIN_DIR="${WMIBENCH_BIN_DIR:-$HOME/.local/bin}"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 PACKAGE_ROOT="$(cd -- "$SCRIPT_DIR/../.." && pwd)"
@@ -55,10 +55,8 @@ cat > "$BIN_DIR/wmibench" <<EOF
 exec "$INSTALL_DIR/.venv/bin/python" -m wmibench "\$@"
 EOF
 chmod +x "$BIN_DIR/wmibench"
-cp "$BIN_DIR/wmibench" "$BIN_DIR/remoteops"
-chmod +x "$BIN_DIR/remoteops"
 
-cat > "$APPLICATIONS_DIR/remoteops.desktop" <<EOF
+cat > "$APPLICATIONS_DIR/wmibench.desktop" <<EOF
 [Desktop Entry]
 Type=Application
 Name=WMIBench

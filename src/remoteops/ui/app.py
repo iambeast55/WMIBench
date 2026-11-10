@@ -21,12 +21,15 @@ def data_dir() -> Path:
         if (bundle_dir / "wmibench.portable").is_file():
             return bundle_dir
 
-    # Retain the legacy location, including its credential key and installed plugins.
+    # Use the WMIBench location for new installs. Existing RemoteOps data remains
+    # usable until the user moves or migrates it.
     if sys.platform == "win32":
         root = Path.home() / "AppData" / "Local"
     else:
         root = Path.home() / ".local" / "share"
-    return root / "RemoteOps"
+    current = root / "WMIBench"
+    legacy = root / "RemoteOps"
+    return legacy if not current.exists() and legacy.exists() else current
 
 
 def run() -> int:
@@ -38,7 +41,12 @@ def run() -> int:
 
     from remoteops.ui.main_window import MainWindow
 
-    repository = Repository(data_dir() / "remoteops.sqlite3")
+    folder = data_dir()
+    database = folder / "wmibench.sqlite3"
+    legacy_database = folder / "remoteops.sqlite3"
+    if not database.exists() and legacy_database.exists():
+        database = legacy_database
+    repository = Repository(database)
     session_manager = SessionManager(repository=repository)
 
     app = QApplication(sys.argv)

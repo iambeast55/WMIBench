@@ -15,10 +15,10 @@ bash ./packaging/linux/install.sh
 
 The installer:
 
-- Copies the app into `~/.local/share/remoteops`.
+- Copies the app into `~/.local/share/WMIBench-app`.
 - Creates a Python virtual environment.
 - Installs WMIBench and its Python dependencies.
-- Adds `wmibench` and compatibility `remoteops` launchers to `~/.local/bin`.
+- Adds the `wmibench` launcher to `~/.local/bin`.
 - Adds a desktop entry to `~/.local/share/applications`.
 
 ## Run
@@ -57,7 +57,7 @@ export PATH="$HOME/.local/bin:$PATH"
 ## Uninstall
 
 ```bash
-~/.local/share/remoteops/packaging/linux/uninstall.sh
+~/.local/share/WMIBench-app/packaging/linux/uninstall.sh
 ```
 
 ## Notes
@@ -70,7 +70,7 @@ configuration, such as `/etc/krb5.conf` and a valid ticket from `kinit`.
 
 Version 0.2.0 adds a persistent runspace, idle keepalive, history and output search,
 table results, dark mode, command help, and verified WinRM file transfers. Run the
-installer again to update; user data is stored separately in `~/.local/share/RemoteOps`.
+installer again to update; user data is stored separately in `~/.local/share/WMIBench`.
 
 Only saved command-library aliases can run in the terminal. Try `events -h`.
 
@@ -84,8 +84,8 @@ target and asks for GUI confirmation; the other handlers collect information.
 No Impacket, SMB, or WinRM fallback is
 included, and transfers are unavailable for WMI-only hosts.
 
-The latest `remoteops-linux-console-fixes-preview.tar.gz` includes this backend for testing.
-Extract it, enter `remoteops-linux-console-fixes-preview`, then run the installer above.
+The latest `wmibench-linux-console-fixes-preview.tar.gz` includes this backend for testing.
+Extract it, enter `wmibench-linux-console-fixes-preview`, then run the installer above.
 Live Linux Connect/sysinfo have been user-confirmed. Reported service/event failures
 are addressed by subclass decoding, bounded event retrieval, and command/session
 error separation; these fixes still need user lab verification. The archive includes `ADDING_WMI_COMMANDS.md`

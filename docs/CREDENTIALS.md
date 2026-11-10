@@ -23,16 +23,16 @@ use Credentials to opt into persistence. They never belong in command arguments.
 
 ## Storage And Backup
 
-Profiles and encrypted secrets live in `remoteops.sqlite3`. Passwords, hashes, and keys use
+Profiles and encrypted secrets live in `wmibench.sqlite3`. Passwords, hashes, and keys use
 authenticated Fernet encryption and are bound to the profile ID. Metadata and
 password updates commit together; a failed encryption/database write does not
 leave half an update. Plaintext passwords are not written into the database.
 
-The encryption key is in `remoteops.key` beside the database:
+The encryption key is in `wmibench.key` beside the database:
 
-- Linux: `~/.local/share/RemoteOps/remoteops.key`, owned by the current user with
+- Linux: `~/.local/share/WMIBench/wmibench.key`, owned by the current user with
   permissions 0600. A key readable by other users is rejected.
-- Windows: `%LOCALAPPDATA%/RemoteOps/remoteops.key`, protected using the current
+- Windows: `%LOCALAPPDATA%/WMIBench/wmibench.key`, protected using the current
   Windows user's DPAPI. A copied key may not be usable from another account/machine.
 
 Close the app before backing up the database and key together. Protect that backup

@@ -1,10 +1,10 @@
-if (-not ('RemoteOps.TerminalSessions' -as [type])) {
+if (-not ('WMIBench.TerminalSessions' -as [type])) {
     Add-Type -TypeDefinition @'
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Runtime.InteropServices;
-namespace RemoteOps {
+namespace WMIBench {
     public class TerminalSession {
         public int SessionId {get;set;}
         public string Station {get;set;}

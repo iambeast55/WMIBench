@@ -8,7 +8,7 @@ gate before building the next part. Part 4b, session reuse (5), and initial Linu
 `sysinfo` integration (6) are implemented in source but remain experimentally
 validated by local fixtures only, except for the earlier native object-codec smoke.
 Do not describe Linux query/session interoperability as verified. The user later
-requested the current work packaged for testing: `dist/remoteops-linux-wmi-preview.tar.gz`.
+requested the current work packaged for testing: `dist/wmibench-linux-wmi-preview.tar.gz`.
 SSH, Ubuntu deployment, and live testing have not been performed.
 
 ## Custom Linux Client Milestones - September 20, 2026

@@ -20,8 +20,8 @@ bash packaging/linux/install.sh
 ~/.local/bin/wmibench
 ```
 
-Application: `~/.local/share/remoteops`. Saved hosts/history/command-library data
-remain in `~/.local/share/RemoteOps`. Existing builtin aliases gain WMI support
+Application: `~/.local/share/WMIBench-app`. Saved hosts/history/command-library data
+remain in `~/.local/share/WMIBench`. Existing builtin aliases gain WMI support
 without Reset Defaults. Customized builtin scripts do not gain implicit WMI support;
 an explicit validated WMI query can be added separately.
 Standalone diagnostic tools are separate from the GUI package.

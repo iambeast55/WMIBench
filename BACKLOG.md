@@ -14,7 +14,7 @@ Larger text, explicit theme-contrast library icons, a consolidated terminal tool
 better history column widths, and full-height inspection tables reclaim workspace.
 Service/event details use a separate window; event timestamps display local time
 while raw values remain available. History has resizable list/output panes.
-The new archive is `remoteops-linux-console-fixes-preview.tar.gz`; earlier previews
+The new archive is `wmibench-linux-console-fixes-preview.tar.gz`; earlier previews
 are preserved. Local tests/Qt captures only, no live remote or SSH testing.
 
 ## Command Forms And Inspection Views - October 16, 2026
@@ -31,7 +31,7 @@ records but disable stale service actions; endpoint/profile changes clear result
 Small-window views scroll without collapsing tables, and light/dark themes are
 covered by offscreen Qt captures. No new protocol methods, standalone service
 start/stop, server-side event filters, or older-event pagination were added.
-The separate package is `remoteops-linux-workspaces-preview.tar.gz`. Verification
+The separate package is `wmibench-linux-workspaces-preview.tar.gz`. Verification
 is local fixtures and Qt only; no SSH, live target tests, or remote deployment.
 
 ## Read-Only Multi-Host Execution - September 27, 2026
@@ -47,7 +47,7 @@ skips queued hosts while dispatched work finishes. Closing waits for active work
 Per-host status/output, combined namespaced records, full-batch CSV, and individual
 history are available. The combined display caps at 10000 rows; full CSV is uncapped
 by that display limit. Previous previews are preserved; this build is packaged as
-`remoteops-linux-multihost-preview.tar.gz`. Local fixture and Qt tests only.
+`wmibench-linux-multihost-preview.tar.gz`. Local fixture and Qt tests only.
 
 ## Command Organization And Failure Recovery - September 27, 2026
 
@@ -64,7 +64,7 @@ Native provider health-check/access errors retain sessions. WinRM timeouts retai
 the pool only after confirmed stop and successful pipeline cleanup. Broken primary
 transport, unknown remote references, and unconfirmed cleanup still require reconnect.
 No mutation replay, live target tests, or SSH deployment. Packaged separately as
-`remoteops-linux-usability-preview.tar.gz`.
+`wmibench-linux-usability-preview.tar.gz`.
 
 ## Custom WMI Query Authoring - September 24, 2026
 
@@ -111,7 +111,7 @@ interoperability has offline fixtures only; no live remote testing or SSH.
 ## User Test Package - September 22, 2026
 
 The user requested packaging the existing work now, with no additional commands.
-`dist/remoteops-linux-wmi-preview.tar.gz` contains the current persistent Linux WMI
+`dist/wmibench-linux-wmi-preview.tar.gz` contains the current persistent Linux WMI
 backend and sysinfo integration. Setup and manual checks are in
 `packaging/linux/TESTING-WMI.md`. Packaging does not establish live interoperability.
 The prior standard archive and installed Ubuntu diagnostic remain unchanged.

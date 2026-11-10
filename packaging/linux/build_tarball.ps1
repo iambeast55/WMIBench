@@ -82,7 +82,7 @@ Get-ChildItem -LiteralPath $stageDir -Recurse -File |
 
 # Windows checkouts can contain CRLF; Bash launchers must use Unix line endings.
 foreach ($script in Get-ChildItem -LiteralPath $stageDir -Recurse -File |
-         Where-Object { $_.Extension -eq ".sh" -or $_.Name -eq "remoteops-dcom" }) {
+         Where-Object { $_.Extension -eq ".sh" -or $_.Name -eq "wmibench-dcom" }) {
     $contents = [IO.File]::ReadAllText($script.FullName).Replace("`r`n", "`n")
     [IO.File]::WriteAllText($script.FullName, $contents, [Text.UTF8Encoding]::new($false))
 }

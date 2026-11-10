@@ -64,11 +64,10 @@ Each plugin is a folder containing `command.json` and `implementation.py`.
 Add it through **Commands > Python commands**, or put it in the data folder's
 `plugins` directory. Valid plugins load automatically; saved edits apply on the next run.
 
-- Windows: `%LOCALAPPDATA%\RemoteOps\plugins`
-- Linux: `~/.local/share/RemoteOps/plugins`
+- Windows: `%LOCALAPPDATA%\WMIBench\plugins`
+- Linux: `~/.local/share/WMIBench/plugins`
 - Portable bundle: the `plugins` folder beside `WMIBench.exe` or `wmibench`
 
-The `RemoteOps` directory name and Python imports are retained for compatibility.
 Plugins run locally under your account. Their `ctx` calls use the selected remote
 connection; plugin code also has access to local files and application data.
 

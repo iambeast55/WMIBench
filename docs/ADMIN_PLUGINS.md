@@ -25,7 +25,7 @@ user's desktop; request completion does not prove the program finished successfu
 
 ### Scheduled-Task Creation Hotfix
 
-`remoteops-task-registry-plugins-taskxml-fix.zip` corrects a creation bug in the
+`wmibench-task-registry-plugins-taskxml-fix.zip` corrects a creation bug in the
 original scheduled-task example. The old plugin wrote `ServiceAccount` into the XML
 LogonType element. That value belongs to the API enum, not the
 [XML schema](https://learn.microsoft.com/en-us/windows/win32/taskschd/task-scheduler-schema).
@@ -49,7 +49,7 @@ the signed-in user's desktop, and create does not automatically run a task.
 
 1. Close the old app and use the current [standalone executable](STANDALONE.md),
    or update your existing source installation. Both include API v3.
-2. Extract `remoteops-task-registry-plugins.zip`. In **Command Library > Python commands**,
+2. Extract `wmibench-task-registry-plugins.zip`. In **Command Library > Python commands**,
    use **Install folder** for each extracted plugin folder, not the pack's parent.
    Alternatively copy the two folders into the application's plugins directory.
 3. The plugins are immediately available. Offline tests are optional. Existing folders
@@ -57,8 +57,8 @@ the signed-in user's desktop, and create does not automatically run a task.
 4. Use `scheduled-task -h` and `registry -h` for the schemas. After future plugin edits,
    save and run again; no further rebuild is needed for code using the same API.
 
-Windows plugin location: `%USERPROFILE%\AppData\Local\RemoteOps\plugins`.
-Linux location: `~/.local/share/RemoteOps/plugins`. Existing saved data is retained.
+Windows plugin location: `%USERPROFILE%\AppData\Local\WMIBench\plugins`.
+Linux location: `~/.local/share/WMIBench/plugins`. Existing saved data is retained.
 
 Both manifests declare `modifies_remote: true`. The entire command is excluded from
 read-only batches, even for list/get actions. Installed plugins run without activation
@@ -79,13 +79,13 @@ is used and the obsolete AT protocol is not enabled.
 ```text
 scheduled-task list
 scheduled-task list --path '\Maintenance\'
-scheduled-task list --name RemoteOpsLab
-scheduled-task create RemoteOpsLab --executable 'C:\Tools\diagnostic.exe' --arguments '--mode check' --account 'LOCAL SERVICE'
-scheduled-task create RemoteOpsDaily --executable 'C:\Tools\diagnostic.exe' --account 'LOCAL SERVICE' --schedule daily --start '2026-11-01T09:00:00-05:00'
-scheduled-task run RemoteOpsLab
-scheduled-task stop RemoteOpsLab
-scheduled-task export RemoteOpsLab
-scheduled-task delete RemoteOpsLab
+scheduled-task list --name WMIBenchLab
+scheduled-task create WMIBenchLab --executable 'C:\Tools\diagnostic.exe' --arguments '--mode check' --account 'LOCAL SERVICE'
+scheduled-task create WMIBenchDaily --executable 'C:\Tools\diagnostic.exe' --account 'LOCAL SERVICE' --schedule daily --start '2026-11-01T09:00:00-05:00'
+scheduled-task run WMIBenchLab
+scheduled-task stop WMIBenchLab
+scheduled-task export WMIBenchLab
+scheduled-task delete WMIBenchLab
 ```
 
 - Mutating actions require an exact name. `--path` defaults to `\` for actions;
@@ -123,17 +123,17 @@ use a disposable test key; do not test writes/deletions against production setti
 
 ```text
 registry keys SOFTWARE --hive HKLM
-registry values 'SOFTWARE\RemoteOpsLab'
-registry create-key 'SOFTWARE\RemoteOpsLab'
-registry set 'SOFTWARE\RemoteOpsLab' --name Label --type SZ --data 'Lab machine'
-registry set 'SOFTWARE\RemoteOpsLab' --name Enabled --type DWORD --data 1
-registry set 'SOFTWARE\RemoteOpsLab' --name LargeNumber --type QWORD --data 0xffffffffffffffff
-registry set 'SOFTWARE\RemoteOpsLab' --name SearchPaths --type MULTI_SZ --data '["C:\\Tools","D:\\Tools"]'
-registry set 'SOFTWARE\RemoteOpsLab' --name Bytes --type BINARY --data '00 ff 10'
-registry get 'SOFTWARE\RemoteOpsLab' --name Enabled --type DWORD
-registry set 'SOFTWARE\RemoteOpsLab' --default-value true --type SZ --data ''
-registry delete-value 'SOFTWARE\RemoteOpsLab' --name Enabled
-registry delete-key 'SOFTWARE\RemoteOpsLab'
+registry values 'SOFTWARE\WMIBenchLab'
+registry create-key 'SOFTWARE\WMIBenchLab'
+registry set 'SOFTWARE\WMIBenchLab' --name Label --type SZ --data 'Lab machine'
+registry set 'SOFTWARE\WMIBenchLab' --name Enabled --type DWORD --data 1
+registry set 'SOFTWARE\WMIBenchLab' --name LargeNumber --type QWORD --data 0xffffffffffffffff
+registry set 'SOFTWARE\WMIBenchLab' --name SearchPaths --type MULTI_SZ --data '["C:\\Tools","D:\\Tools"]'
+registry set 'SOFTWARE\WMIBenchLab' --name Bytes --type BINARY --data '00 ff 10'
+registry get 'SOFTWARE\WMIBenchLab' --name Enabled --type DWORD
+registry set 'SOFTWARE\WMIBenchLab' --default-value true --type SZ --data ''
+registry delete-value 'SOFTWARE\WMIBenchLab' --name Enabled
+registry delete-key 'SOFTWARE\WMIBenchLab'
 ```
 
 - Hives: HKLM (default), HKU, HKCR, HKCC. Remote HKCU is deliberately not exposed;

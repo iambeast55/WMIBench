@@ -19,7 +19,7 @@ MUTATIONS = {"terminate", "delete-file", "rename-file", "disconnect-session", "l
 def run_script(session, script, cancel):
     from remoteops.remoting.session import PsrpSession
     from remoteops.remoting.output import records_text
-    marker = "RemoteOpsExit_" + uuid4().hex
+    marker = "WMIBenchExit_" + uuid4().hex
     wrapped = "& { $global:LASTEXITCODE=0; . {\n" + script + "\n}; $ok=$?; [pscustomobject]@{" + marker + "=$global:LASTEXITCODE; PipelineSucceeded=$ok} }"
     result = (session.run(wrapped, 120, cancel=cancel) if isinstance(session, PsrpSession)
               else session.run(wrapped, 120))
@@ -190,11 +190,11 @@ def perform(ctx, action, args):
             raise ValueError("Session disconnect/logoff requires WinRM; WMI logon IDs are not terminal session IDs.")
         script = Path(__file__).with_name("terminal_sessions.ps1").read_text(encoding="utf-8")
         if action == "sessions":
-            return ps(ctx, script + "\n[RemoteOps.TerminalSessions]::List()")
+            return ps(ctx, script + "\n[WMIBench.TerminalSessions]::List()")
         sid = number(args.get("SessionId"), "terminal session")
         user = args.get("User", "")
         if not user:
             raise ValueError("Select a signed-in user session.")
-        return ps(ctx, script + f"\n[RemoteOps.TerminalSessions]::Change({sid}, {ps_literal(user)}, "
+        return ps(ctx, script + f"\n[WMIBench.TerminalSessions]::Change({sid}, {ps_literal(user)}, "
                   + ("$true" if action == "logoff-session" else "$false") + "); [pscustomobject]@{Requested=$true}")
     raise ValueError(f"Unknown tool action: {action}")

@@ -16,21 +16,22 @@ class BrandingTests(unittest.TestCase):
         self.assertEqual(raised.exception.code, 7)
         main.assert_called_once_with()
 
-    def test_distribution_and_legacy_entry_point_remain_compatible(self):
+    def test_distribution_uses_wmibench_identity(self):
         root = Path(__file__).resolve().parents[1]
         config = tomllib.loads((root / "pyproject.toml").read_text(encoding="utf-8"))
-        self.assertEqual(config["project"]["name"], "remoteops")
+        self.assertEqual(config["project"]["name"], "wmibench")
         scripts = config["project"]["scripts"]
-        self.assertEqual(scripts["wmibench"], scripts["remoteops"])
+        self.assertIn("wmibench", scripts)
+        self.assertNotIn("remoteops", scripts)
         self.assertIn("src/wmibench", config["tool"]["hatch"]["build"]["targets"]["wheel"]["packages"])
 
-    def test_data_paths_and_credential_service_do_not_change(self):
+    def test_data_paths_and_credential_service_use_wmibench(self):
         home = Path.home()
-        with patch("remoteops.ui.app.sys.platform", "win32"):
-            self.assertEqual(data_dir(), home / "AppData/Local/RemoteOps")
-        with patch("remoteops.ui.app.sys.platform", "linux"):
-            self.assertEqual(data_dir(), home / ".local/share/RemoteOps")
-        self.assertEqual(SERVICE_NAME, "RemoteOps")
+        with patch("remoteops.ui.app.sys.platform", "win32"), patch("remoteops.ui.app.Path.exists", return_value=False):
+            self.assertEqual(data_dir(), home / "AppData/Local/WMIBench")
+        with patch("remoteops.ui.app.sys.platform", "linux"), patch("remoteops.ui.app.Path.exists", return_value=False):
+            self.assertEqual(data_dir(), home / ".local/share/WMIBench")
+        self.assertEqual(SERVICE_NAME, "WMIBench")
 
     def test_qt_application_name_changes_without_changing_database(self):
         app = Mock()
@@ -43,18 +44,17 @@ class BrandingTests(unittest.TestCase):
                 patch("remoteops.ui.app.SessionManager"):
             self.assertEqual(run(), 0)
         app.setApplicationName.assert_called_once_with("WMIBench")
-        repository.assert_called_once_with(folder / "remoteops.sqlite3")
+        repository.assert_called_once_with(folder / "wmibench.sqlite3")
 
     def test_linux_install_and_uninstall_share_compatible_locations(self):
         root = Path(__file__).resolve().parents[1] / "packaging/linux"
         install = (root / "install.sh").read_text(encoding="utf-8")
         uninstall = (root / "uninstall.sh").read_text(encoding="utf-8")
         for text in (install, uninstall):
-            self.assertIn('${WMIBENCH_INSTALL_DIR:-${REMOTEOPS_INSTALL_DIR:-$HOME/.local/share/remoteops}}', text)
-            self.assertIn('${WMIBENCH_BIN_DIR:-${REMOTEOPS_BIN_DIR:-$HOME/.local/bin}}', text)
+            self.assertIn('${WMIBENCH_INSTALL_DIR:-$HOME/.local/share/WMIBench-app}', text)
+            self.assertIn('${WMIBENCH_BIN_DIR:-$HOME/.local/bin}', text)
             self.assertIn('"$BIN_DIR/wmibench"', text)
-            self.assertIn('"$BIN_DIR/remoteops"', text)
-            self.assertIn('"$APPLICATIONS_DIR/remoteops.desktop"', text)
+            self.assertIn('"$APPLICATIONS_DIR/wmibench.desktop"', text)
         self.assertIn("Name=WMIBench", install)
         self.assertIn("Exec=$BIN_DIR/wmibench", install)
         self.assertIn("-m wmibench", install)

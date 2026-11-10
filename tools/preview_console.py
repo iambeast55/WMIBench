@@ -48,12 +48,12 @@ def main():
         window.set_host_state(window.hosts[2].id, SessionState.ERROR)
         tab.terminal.clear()
         for text, role in [
-            ("remoteops> connect APP-SRV-01", "prompt"),
+            ("wmibench> connect APP-SRV-01", "prompt"),
             ("[connected]", "success"),
-            ("remoteops> sysinfo", "prompt"),
+            ("wmibench> sysinfo", "prompt"),
             ("[ok in 0.82s]", "success"),
             ("ComputerName    : APP-SRV-01\nOperatingSystem : Microsoft Windows Server 2022 Standard\nVersion         : 10.0.20348\nLastBootUpTime  : 09/01/2026 06:32:18\nTotalMemoryGB   : 32", "stdout"),
-            ("remoteops> disk", "prompt"),
+            ("wmibench> disk", "prompt"),
             ("[ok in 0.34s]", "success"),
             ("Drive  Label      SizeGB  FreeGB  FreePercent\n-----  -----      ------  ------  -----------\nC:     System        128    78.4         61.3\nD:     AppData       1024   612.8         59.8", "stdout"),
         ]:

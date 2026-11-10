@@ -93,7 +93,7 @@ class ToolBackendTests(unittest.TestCase):
         session._stream_text = ""
         def run(script, timeout):
             import re
-            marker = re.search(r"RemoteOpsExit_[a-f0-9]+", script).group()
+            marker = re.search(r"WMIBenchExit_[a-f0-9]+", script).group()
             return CommandResult("id", "host", script, records=[{"Value": "hello"}, {marker: 9, "PipelineSucceeded": False}], exit_code=0)
         session.run.side_effect = run
         result = run_script(session, "cmd /c exit 9", threading.Event())

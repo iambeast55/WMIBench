@@ -3,8 +3,7 @@ requires = ["hatchling>=1.25"]
 build-backend = "hatchling.build"
 
 [project]
-# Keep the distribution ID so pip upgrades existing installs in place.
-name = "remoteops"
+name = "wmibench"
 version = "0.2.0"
 description = "WMIBench: Windows administration over persistent WMI/DCOM and WinRM sessions."
 readme = "README.md"
@@ -38,7 +37,6 @@ dev = [
 
 [project.scripts]
 wmibench = "remoteops.__main__:main"
-remoteops = "remoteops.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/remoteops", "src/wmibench"]

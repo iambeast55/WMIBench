@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-INSTALL_DIR="${WMIBENCH_INSTALL_DIR:-${REMOTEOPS_INSTALL_DIR:-$HOME/.local/share/remoteops}}"
-BIN_DIR="${WMIBENCH_BIN_DIR:-${REMOTEOPS_BIN_DIR:-$HOME/.local/bin}}"
+INSTALL_DIR="${WMIBENCH_INSTALL_DIR:-$HOME/.local/share/WMIBench-app}"
+BIN_DIR="${WMIBENCH_BIN_DIR:-$HOME/.local/bin}"
 APPLICATIONS_DIR="${XDG_DATA_HOME:-$HOME/.local/share}/applications"
 
-rm -f "$BIN_DIR/remoteops"
 rm -f "$BIN_DIR/wmibench"
-rm -f "$APPLICATIONS_DIR/remoteops.desktop"
+rm -f "$APPLICATIONS_DIR/wmibench.desktop"
 rm -rf "$INSTALL_DIR"
 
 if command -v update-desktop-database >/dev/null 2>&1; then

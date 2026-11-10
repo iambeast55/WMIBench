@@ -2,7 +2,7 @@
 
 For the standalone build, run **WMIBench.exe**. No Python, pip or installer is
 required. Close the old app before replacing its executable. Saved data and plugins
-remain in `%USERPROFILE%\AppData\Local\RemoteOps`. See [Standalone Deployment](STANDALONE.md).
+remain in `%USERPROFILE%\AppData\Local\WMIBench`. See [Standalone Deployment](STANDALONE.md).
 
 The alternative source-install instructions below require Python 3.12 or newer.
 `wmibench-preview.zip` is a source bundle,
@@ -32,7 +32,7 @@ source folder (replace the example path with its actual location):
 ```
 
 This replaces application code in that environment. It does not delete saved hosts,
-credentials, history or plugins in `%USERPROFILE%\AppData\Local\RemoteOps`.
+credentials, history or plugins in `%USERPROFILE%\AppData\Local\WMIBench`.
 Use the same Windows account as before to retain access to saved credentials.
 
 ## Invocation Fix
@@ -56,5 +56,5 @@ when supplying an explicit `outputs` dictionary. For process creation, use
 does not open an interactive window on the remote user's desktop.
 
 See [Plugin API](PLUGIN_API.md) for the full contract. Plugins live in
-`%USERPROFILE%\AppData\Local\RemoteOps\plugins`; added folders and saved edits
+`%USERPROFILE%\AppData\Local\WMIBench\plugins`; added folders and saved edits
 are discovered automatically on the next run.
