@@ -41,7 +41,7 @@ class DeleteApiTests(unittest.TestCase):
         callback = Mock(side_effect=delete)
         ctx = PluginContext(backend="wmi_dcom", modifies_remote=True, cancel=cancel, delete_instance=callback)
         self.assertTrue(ctx.delete_instance('Example.Name="x"')["Deleted"])
-        with self.assertRaisesRegex(PluginError, "Side effects"):
+        with self.assertRaisesRegex(PluginError, "Remote state may have changed"):
             ctx.delete_instance('Example.Name="x"')
         callback.assert_called_once()
 

@@ -248,7 +248,7 @@ class ToolUiTests(unittest.TestCase):
         p.loaded(SimpleNamespace(error="Access denied", value=None))
         self.assertFalse(p.fresh)
         self.assertFalse(p.buttons["terminate"].isEnabled())
-        self.assertIn("permission", p.status.text().lower())
+        self.assertIn("access denied", p.status.text().lower())
 
     def test_inline_notice_reuses_nonmodal_widget(self):
         dialog = QDialog()

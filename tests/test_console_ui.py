@@ -93,12 +93,12 @@ class ConsoleUiTests(unittest.TestCase):
             self.window.check_sessions()
             self.window.check_sessions()
             text = self.tab.terminal.toPlainText()
-            self.assertEqual(text.count("The action's final result is unknown."), 1)
+            self.assertEqual(text.count("Outcome unknown."), 1)
             self.assertIn(detail, text)
             # A new underlying failure is still surfaced by the poll.
             with patch.object(self.manager, "errors", return_value={self.host.id: "RPC server unavailable"}):
                 self.window.check_sessions()
-            self.assertIn("could not be reached", self.tab.terminal.toPlainText())
+            self.assertIn("unreachable", self.tab.terminal.toPlainText())
 
     def test_failure_retains_full_error_and_reenables_controls(self):
         class FailedSession(FakeSession):
@@ -173,7 +173,7 @@ class ConsoleUiTests(unittest.TestCase):
         self.window.set_host_state(self.host.id, SessionState.RUNNING)
         self.window.finish_run(self.host.id, self.tab.terminal, WorkerOutcome(error="Local history save failed"))
         self.assertEqual(self.tab.status_text.text(), "Connected")
-        self.assertIn("still connected", self.tab.terminal.toPlainText())
+        self.assertIn("Session connected", self.tab.terminal.toPlainText())
         self.assertIn("Local history save failed", self.tab.terminal.toPlainText())
 
     def test_errors_are_copyable_in_console_without_extra_controls(self):
@@ -271,7 +271,7 @@ class ConsoleUiTests(unittest.TestCase):
                 self.tab.run_button.click()
                 self.wait_for_workers()
                 self.assertEqual(self.tab.status_text.text(), "Connected")
-                self.assertIn("response could not be read", self.tab.terminal.toPlainText())
+                self.assertIn("WMI response parse failed", self.tab.terminal.toPlainText())
                 self.assertIn("unexpected CIM class", self.tab.terminal.toPlainText())
                 self.assertEqual(client.closes, 0)
                 client.failure = None

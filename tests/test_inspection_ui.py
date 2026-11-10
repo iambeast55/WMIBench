@@ -173,7 +173,7 @@ class InspectionUiTests(unittest.TestCase):
             panel.restart_button.click()
             self.wait()
         confirm.assert_called_once()
-        self.assertIn("not be force-stopped", confirm.call_args.args[2])
+        self.assertIn("Dependent services are not stopped", confirm.call_args.args[2])
         self.assertEqual([call.alias for call in session.calls], ["services", "restart-service"])
         self.assertEqual(session.state, SessionState.CONNECTED)
         self.assertFalse(panel.restart_button.isEnabled())

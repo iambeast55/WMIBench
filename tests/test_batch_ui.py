@@ -102,7 +102,7 @@ class BatchUiTests(unittest.TestCase):
         row = next(row for row in range(self.dialog.summary.rowCount()) if self.dialog.summary.item(row, 0).text() == "server-1")
         self.dialog.summary.selectRow(row)
         self.assertIn("Access denied", self.dialog.viewer.text.toPlainText())
-        self.assertIn("permission", self.dialog.summary.item(row, 4).text())
+        self.assertIn("access denied", self.dialog.summary.item(row, 4).text().lower())
         self.dialog.summary.sortItems(1, Qt.SortOrder.AscendingOrder)
         self.dialog.summary_search.setText("server-1")
         visible = [self.dialog.summary.item(row, 0).text() for row in range(self.dialog.summary.rowCount())

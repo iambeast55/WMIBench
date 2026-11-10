@@ -95,7 +95,7 @@ class ArgumentFormsTests(unittest.TestCase):
 
     def test_cancel_and_invalid_initial_input_do_not_change_caller(self):
         dialog = self.dialog(initial="events --count nope")
-        self.assertIn("could not be loaded", dialog.notice.text())
+        self.assertIn("Argument load failed", dialog.notice.text())
         dialog.reject()
         self.assertEqual(dialog.result(), QDialog.DialogCode.Rejected)
 

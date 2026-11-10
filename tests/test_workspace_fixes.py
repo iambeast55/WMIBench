@@ -140,7 +140,7 @@ class WorkspaceFixTests(unittest.TestCase):
             panel.refresh()
             self.wait()
         self.assertEqual(self.tab.status_text.text(), "Connected")
-        self.assertIn("permission", panel.status.text())
+        self.assertIn("Access denied", panel.status.text())
         self.assertTrue(panel.refresh_button.isEnabled())
         capture = os.environ.get("REMOTEOPS_CAPTURE_DIR")
         if capture:
