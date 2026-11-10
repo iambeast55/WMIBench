@@ -34,10 +34,10 @@ def main():
             CredentialProfile(name="Infrastructure admins", username="EXAMPLE\\ops")
         )
         for name, address, group in [
-            ("APP-SRV-01", "10.24.8.12", "Production"),
-            ("DC-01", "10.24.8.2", "Infrastructure"),
-            ("FILE-SRV-02", "10.24.8.24", "Production"),
-            ("WEB-STAGING", "10.24.16.10", "Staging"),
+            ("APP-SRV-01", "192.0.2.12", "Production"),
+            ("DC-01", "192.0.2.2", "Infrastructure"),
+            ("FILE-SRV-02", "192.0.2.24", "Production"),
+            ("WEB-STAGING", "192.0.2.10", "Staging"),
         ]:
             repository.save_host(Host(name=name, address=address, group_name=group, auth_profile_id=profile.id))
         window = MainWindow(repository, SessionManager(repository=repository, session_factory=FakeSession))

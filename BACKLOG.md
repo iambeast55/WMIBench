@@ -167,7 +167,7 @@ Next: part 4b, one read-only OS query and structured result decoding.
 Fixed the decoder rejecting nonzero ORPCTHAT flags: MS-DCOM requires ignoring them.
 Non-null extensions still fail explicitly, with the actual header values reported.
 111 local tests and 68 Ubuntu protocol tests pass. Updated the persistent standalone
-diagnostic at `~/wmibench-diagnostic`; it is not the full GUI package.
+diagnostic; it is not the full GUI package.
 
 At 2026-09-22 00:34:58 UTC, live Ubuntu-to-Windows activation obtained the WMI login
 interface, reached its TCP exporter, and confirmed protected reference release.

@@ -50,24 +50,37 @@ not covered by the supplied builds. Use the source installer for older Debian.
 Windows artifacts are unsigned previews; organizational application-control policies
 may require signing/approval. Do not disable endpoint protection to run a build.
 
-## Build Once, Distribute The Executable
+## Self-build
 
-These are maintainer steps, not end-user installation steps. Run on the target OS:
+Build locally on the target OS. PyInstaller does not cross-compile.
 
-```text
-python -m pip install . -r packaging/standalone/requirements.txt
-python packaging/standalone/build.py
+Windows PowerShell:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pip install -r packaging/standalone/requirements.txt
+.\.venv\Scripts\python.exe packaging/standalone/build.py --bundle
 ```
 
-Use Python 3.13 for the supplied build/test baseline. The build writes to a per-platform
-folder under `dist/standalone` and generates a SHA-256 sidecar. It includes font/icon
+Linux:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install . -r packaging/standalone/requirements.txt
+python packaging/standalone/build.py --bundle
+```
+
+Use Python 3.13 for the supplied build/test baseline. The build writes to a platform
+folder under `dist` and generates a SHA-256 sidecar. It includes font/icon
 resources, the session-management PowerShell asset, pywin32 on Windows, and dynamic
 keyring backends. PyInstaller is pinned; application dependency ranges remain those
 in `pyproject.toml`, so rebuilding later may select newer compatible dependencies.
 
-`.github/workflows/standalone.yml` builds and tests on Windows and Linux using manual
-workflow dispatch or a `v*` tag. It uploads artifacts, not a public release, and never
-connects to remote hosts. Linux must be built on Linux, not cross-compiled on Windows:
+The repository does not build executables for ordinary source changes. If you use the
+optional manual workflow, it runs the same build and tests on Windows and Linux, then
+uploads artifacts. Linux must be built on Linux, not cross-compiled on Windows:
 [PyInstaller operating model](https://pyinstaller.org/en/latest/operating-mode.html).
 
 Plugins may import the app's public API, bundled dependencies and included standard

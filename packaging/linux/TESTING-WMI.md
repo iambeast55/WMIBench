@@ -24,7 +24,7 @@ Application: `~/.local/share/remoteops`. Saved hosts/history/command-library dat
 remain in `~/.local/share/RemoteOps`. Existing builtin aliases gain WMI support
 without Reset Defaults. Customized builtin scripts do not gain implicit WMI support;
 an explicit validated WMI query can be added separately.
-The standalone diagnostic at `~/remoteops-diagnostic` is not updated.
+Standalone diagnostic tools are separate from the GUI package.
 
 ## Python Commands Without Rebuilding
 

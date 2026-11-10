@@ -9,10 +9,8 @@ The Windows standalone build includes Python and its dependencies. Launch
 `WMIBench.exe`; no pip installation is needed. Portable bundles also include
 their command configuration and plugins beside the executable.
 
-The portable Windows bundle is staged under
-`dist/WMIBench-windows-x86_64/`. Linux bundles are built on Linux because
-PyInstaller does not cross-compile; use `python packaging/standalone/build.py --bundle`
-on the Linux target. See [Standalone deployment](docs/STANDALONE.md).
+Executable bundles are built locally on the target OS. PyInstaller does not
+cross-compile. See [Standalone deployment](docs/STANDALONE.md).
 
 For development, create a virtual environment, activate it, then install and launch:
 
@@ -105,6 +103,32 @@ See [Credentials](docs/CREDENTIALS.md).
 python -m unittest discover -s tests -v
 python packaging/standalone/build.py --variant management
 ```
+
+To build a self-contained executable, install the standalone build dependency
+and run the builder on the target OS:
+
+Windows PowerShell:
+
+```powershell
+py -3.13 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -e .
+.\.venv\Scripts\python.exe -m pip install -r packaging/standalone/requirements.txt
+.\.venv\Scripts\python.exe packaging/standalone/build.py --bundle
+```
+
+Linux:
+
+```bash
+python3 -m venv .venv
+. .venv/bin/activate
+python -m pip install -e .
+python -m pip install -r packaging/standalone/requirements.txt
+python packaging/standalone/build.py --bundle
+```
+
+The output is under `dist/WMIBench-windows-x86_64/` or
+`dist/WMIBench-linux-x86_64/`. Build Linux binaries on Ubuntu/Debian or another
+glibc-based Linux host; build Windows binaries on Windows.
 
 Tests use fake transports and local fixtures. They do not run commands on remote hosts.
 Protocol notes and remaining backend work are in [WMI plan](WMI_PLAN.md).

@@ -324,7 +324,7 @@ bash packaging/linux/install.sh
 ```
 
 The archive includes this guide and tests. User data stays in
-`~/.local/share/RemoteOps`. The standalone `~/remoteops-diagnostic` is not updated.
+`~/.local/share/RemoteOps`. Standalone diagnostic tools are separate from the GUI package.
 Start with read-only queries and idle/reconnect checks. Use only a deliberately
 chosen lab service for restart testing.
 
