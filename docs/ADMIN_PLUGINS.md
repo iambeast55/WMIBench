@@ -47,8 +47,7 @@ the signed-in user's desktop, and create does not automatically run a task.
 
 ### Initial Installation
 
-1. Close the old app and use the current [standalone executable](STANDALONE.md),
-   or update your existing source installation. Both include API v3.
+1. Close the old app and update the repository checkout. The current source includes API v3.
 2. Extract `wmibench-task-registry-plugins.zip`. In **Command Library > Python commands**,
    use **Install folder** for each extracted plugin folder, not the pack's parent.
    Alternatively copy the two folders into the application's plugins directory.
@@ -57,8 +56,7 @@ the signed-in user's desktop, and create does not automatically run a task.
 4. Use `scheduled-task -h` and `registry -h` for the schemas. After future plugin edits,
    save and run again; no further rebuild is needed for code using the same API.
 
-Windows plugin location: `%USERPROFILE%\AppData\Local\WMIBench\plugins`.
-Linux location: `~/.local/share/WMIBench/plugins`. Existing saved data is retained.
+Repository plugin location: `./plugins`. Existing saved data is retained.
 
 Both manifests declare `modifies_remote: true`. The entire command is excluded from
 read-only batches, even for list/get actions. Installed plugins run without activation

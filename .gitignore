@@ -6,12 +6,15 @@ __pycache__/
 .mypy_cache/
 build/
 
-# Keep the final portable bundle; exclude any other generated distribution output.
+# Generated output.
 dist/*
-!dist/WMIBench-windows-x86_64/
-!dist/WMIBench-windows-x86_64/**
-dist/WMIBench-windows-x86_64/WMIBench.exe
-dist/WMIBench-windows-x86_64/WMIBench.exe.sha256
+
+# Repository-local application state.
+wmibench.sqlite3
+wmibench.key
+remoteops.sqlite3
+remoteops.key
+settings.ini
 
 *.log
 *.tmp

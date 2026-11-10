@@ -50,11 +50,11 @@ path until edited. Basic authentication is retained only for existing profiles.
 
 The explicit-DC Kerberos code is shared by Windows and Linux. It uses Python protocol
 libraries, without requiring a domain join or a separate system `kinit` installation.
-WMI key/hash authentication uses the portable DCOM adapter on Windows as well as Linux.
+WMI key/hash authentication uses the DCOM adapter on Windows as well as Linux.
 WinRM uses the existing PSRP runspace with a connection-local authentication and DNS adapter.
 
 Class metadata inspection in Explorer currently requires WinRM or native Windows WMI.
-Portable DCOM supports namespace browsing and the existing query/method/plugin commands,
+The DCOM adapter supports namespace browsing and the existing query/method/plugin commands,
 but not class metadata enumeration. Switching credential type does not silently switch
 between WMI and WinRM.
 

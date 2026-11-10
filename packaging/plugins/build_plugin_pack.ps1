@@ -20,7 +20,7 @@ foreach ($alias in @("scheduled-task", "registry")) {
         Copy-Item -LiteralPath (Join-Path $repo "examples\plugins\$alias\$file") -Destination $destination
     }
 }
-foreach ($file in @("ADMIN_PLUGINS.md", "WINDOWS_SETUP.md", "STANDALONE.md", "PYTHON_COMMANDS.md", "PLUGIN_API.md")) {
+foreach ($file in @("ADMIN_PLUGINS.md", "WINDOWS_SETUP.md", "PYTHON_COMMANDS.md", "PLUGIN_API.md")) {
     Copy-Item -LiteralPath (Join-Path $repo "docs\$file") -Destination $stage
 }
 Copy-Item -LiteralPath (Join-Path $PSScriptRoot "README.md") -Destination $stage

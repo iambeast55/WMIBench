@@ -3,25 +3,33 @@
 A desktop console for Windows administration over WMI/DCOM and WinRM.
 Save hosts and credentials, connect once, and run commands through the same session.
 
-## Run
+## Install and run
 
-The Windows standalone build includes Python and its dependencies. Launch
-`WMIBench.exe`; no pip installation is needed. Portable bundles also include
-their command configuration and plugins beside the executable.
+Use the scripts from the repository root. They create `.venv`, install the source
+in editable mode, and keep plugins and application data in this folder.
 
-Executable bundles are built locally on the target OS. PyInstaller does not
-cross-compile. See [Standalone deployment](docs/STANDALONE.md).
+Linux:
 
-For development, create a virtual environment, activate it, then install and launch:
-
-```text
-python -m venv .venv
-python -m pip install -e .
-python -m wmibench
+```bash
+./install.sh
+./run.sh
 ```
 
-Platform-specific setup:
-[Windows](docs/WINDOWS_SETUP.md), [Linux](packaging/linux/TESTING-WMI.md).
+Windows PowerShell:
+
+```powershell
+.\install.ps1
+.\run.ps1
+```
+
+Windows Command Prompt:
+
+```text
+install.cmd
+run.cmd
+```
+
+See [Windows setup](docs/WINDOWS_SETUP.md) and [Linux WMI testing](packaging/linux/TESTING-WMI.md).
 For Linux proxychains use, see [Proxychains](docs/PROXYCHAINS.md).
 
 ## Workspace
@@ -53,7 +61,7 @@ Tab or Enter accepts a suggestion; accepting it does not run the command.
 Up/Down recalls earlier commands when the suggestion list is closed.
 
 Explorer class inspection works with native Windows WMI and with WinRM from either
-client OS. The portable DCOM transport (Linux WMI, and Windows WMI with keys/hashes
+client OS. The DCOM transport (Linux WMI, and Windows WMI with keys/hashes
 or an explicit DC) currently supports namespace browsing only. The explorer does
 not invoke methods; copied method examples can be used in a plugin.
 See [Explorer](docs/EXPLORER.md).
@@ -61,12 +69,8 @@ See [Explorer](docs/EXPLORER.md).
 ## Plugins
 
 Each plugin is a folder containing `command.json` and `implementation.py`.
-Add it through **Commands > Python commands**, or put it in the data folder's
+Add it through **Commands > Python commands**, or put it in the repository's
 `plugins` directory. Valid plugins load automatically; saved edits apply on the next run.
-
-- Windows: `%LOCALAPPDATA%\WMIBench\plugins`
-- Linux: `~/.local/share/WMIBench/plugins`
-- Portable bundle: the `plugins` folder beside `WMIBench.exe` or `wmibench`
 
 Plugins run locally under your account. Their `ctx` calls use the selected remote
 connection; plugin code also has access to local files and application data.
@@ -100,34 +104,7 @@ See [Credentials](docs/CREDENTIALS.md).
 
 ```text
 python -m unittest discover -s tests -v
-python packaging/standalone/build.py --variant management
 ```
-
-To build a self-contained executable, install the standalone build dependency
-and run the builder on the target OS:
-
-Windows PowerShell:
-
-```powershell
-py -3.13 -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -e .
-.\.venv\Scripts\python.exe -m pip install -r packaging/standalone/requirements.txt
-.\.venv\Scripts\python.exe packaging/standalone/build.py --bundle
-```
-
-Linux:
-
-```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e .
-python -m pip install -r packaging/standalone/requirements.txt
-python packaging/standalone/build.py --bundle
-```
-
-The output is under `dist/WMIBench-windows-x86_64/` or
-`dist/WMIBench-linux-x86_64/`. Build Linux binaries on Ubuntu/Debian or another
-glibc-based Linux host; build Windows binaries on Windows.
 
 Tests use fake transports and local fixtures. They do not run commands on remote hosts.
 Protocol notes and remaining backend work are in [WMI plan](WMI_PLAN.md).

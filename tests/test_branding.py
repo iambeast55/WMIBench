@@ -46,15 +46,10 @@ class BrandingTests(unittest.TestCase):
         app.setApplicationName.assert_called_once_with("WMIBench")
         repository.assert_called_once_with(folder / "wmibench.sqlite3")
 
-    def test_linux_install_and_uninstall_share_compatible_locations(self):
-        root = Path(__file__).resolve().parents[1] / "packaging/linux"
+    def test_repository_launchers_use_local_state(self):
+        root = Path(__file__).resolve().parents[1]
         install = (root / "install.sh").read_text(encoding="utf-8")
-        uninstall = (root / "uninstall.sh").read_text(encoding="utf-8")
-        for text in (install, uninstall):
-            self.assertIn('${WMIBENCH_INSTALL_DIR:-$HOME/.local/share/WMIBench-app}', text)
-            self.assertIn('${WMIBENCH_BIN_DIR:-$HOME/.local/bin}', text)
-            self.assertIn('"$BIN_DIR/wmibench"', text)
-            self.assertIn('"$APPLICATIONS_DIR/wmibench.desktop"', text)
-        self.assertIn("Name=WMIBench", install)
-        self.assertIn("Exec=$BIN_DIR/wmibench", install)
-        self.assertIn("-m wmibench", install)
+        run = (root / "run.sh").read_text(encoding="utf-8")
+        self.assertIn('"$ROOT/.venv/bin/python" -m pip install --editable "$ROOT"', install)
+        self.assertIn('export WMIBENCH_DATA_DIR="$ROOT"', run)
+        self.assertIn('exec "$PYTHON" -m wmibench "$@"', run)

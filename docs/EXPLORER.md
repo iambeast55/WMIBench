@@ -34,7 +34,7 @@ current plugin API. See [API reference](PLUGIN_API.md).
 | --- | --- | --- | --- |
 | Windows, native WMI/DCOM (password, system authentication) | Yes | Yes | Yes |
 | Windows or Linux, WinRM | Yes | Yes | Yes |
-| Portable WMI/DCOM (Linux; Windows with keys/hashes or explicit DC) | Yes | Not yet | Not through Explorer |
+| WMI/DCOM (Linux; Windows with keys/hashes or explicit DC) | Yes | Not yet | Not through Explorer |
 
 WinRM inspection uses CIM cmdlets on the target. The copied `ctx.query` and
 `ctx.invoke` examples are for WMI plugins, even when the schema was inspected over

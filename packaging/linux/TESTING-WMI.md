@@ -11,20 +11,18 @@ deployment, live query, or service change was performed for this expansion.
 ## Install And Launch
 
 Use a Linux desktop with Python 3.12+, venv support, and dependency download access.
-Close WMIBench; extract outside the application's install directory.
+Run from the repository root.
 
 ```bash
-tar -xzf wmibench-preview.tar.gz
-cd wmibench-preview
-bash packaging/linux/install.sh
-~/.local/bin/wmibench
+./install.sh
+./run.sh
 ```
 
-Application: `~/.local/share/WMIBench-app`. Saved hosts/history/command-library data
-remain in `~/.local/share/WMIBench`. Existing builtin aliases gain WMI support
+Application code, plugins, and saved hosts/history remain in the repository folder.
+Existing builtin aliases gain WMI support
 without Reset Defaults. Customized builtin scripts do not gain implicit WMI support;
 an explicit validated WMI query can be added separately.
-Standalone diagnostic tools are separate from the GUI package.
+The diagnostic launcher is separate from the GUI.
 
 ## Python Commands Without Rebuilding
 
@@ -118,7 +116,7 @@ local-account security limits. This release has no live-host validation.
 6. Check light/dark themes and a small window; inspection tables use the full view.
    Terminal tools return in Terminal. History retains structured result tables.
 
-See `docs/COMMAND_WORKSPACES.md` for scope and limitations. Standalone service
+See `docs/COMMAND_WORKSPACES.md` for scope and limitations. Separate service
 start/stop and older-event pagination are not part of this preview.
 
 ## Multi-Host Checks

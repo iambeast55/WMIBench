@@ -1,7 +1,7 @@
 # WMIBench Naming
 
 WMIBench is the product name used by the application, distribution, launchers,
-desktop entry, portable bundles, data directories, and documentation.
+data directories, and documentation.
 
 ## Launch
 
@@ -10,11 +10,12 @@ wmibench
 python -m wmibench
 ```
 
-Standalone bundles launch with `WMIBench.exe` on Windows and `wmibench` on Linux.
+The repository launchers are `run.ps1`/`run.cmd` on Windows and `run.sh` on Linux.
 
 ## Existing data
 
-New data is stored under:
+When launched with the repository scripts, data is stored in the repository folder.
+Direct `python -m wmibench` launches use the per-user WMIBench directory:
 
 - Windows: `%LOCALAPPDATA%\WMIBench`
 - Linux: `~/.local/share/WMIBench`

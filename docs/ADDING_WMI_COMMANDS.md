@@ -60,7 +60,7 @@ boolean. A PowerShell command may also set `module_path` to a local `.ps1` or
 `.psm1` file. WMIBench sends that script source through WinRM and runs it in the
 persistent session scope before the command script; it never writes the file to
 the remote disk. Leave `script` blank to load the local script without invoking a
-second command. The module path belongs to the WMIBench client and is not portable
+second command. The module path belongs to the WMIBench client and is not loaded
 across clients. These fields survive export/import/duplication. Older builds with strict schemas
 cannot read these new metadata fields; keep a library backup before downgrading.
 A WMI definition accepts only:
@@ -311,20 +311,18 @@ From the repository root on Windows:
 ```powershell
 $env:PYTHONPATH = 'src'
 .\.venv\Scripts\python.exe -m unittest discover -s tests -q
-.\packaging\linux\build_tarball.ps1 -PackageName wmibench-linux-console-fixes-preview
+.\install.ps1
 ```
 
-On Ubuntu, close WMIBench and extract outside the install directory:
+On Ubuntu, close WMIBench and run from the repository root:
 
 ```bash
-tar -xzf wmibench-linux-console-fixes-preview.tar.gz
-cd wmibench-linux-console-fixes-preview
-bash packaging/linux/install.sh
-~/.local/bin/wmibench
+./install.sh
+./run.sh
 ```
 
-The archive includes this guide and tests. User data stays in
-`~/.local/share/WMIBench`. Standalone diagnostic tools are separate from the GUI package.
+The guide and tests are in the repository. Plugins and user data stay in the
+repository folder. The diagnostic launcher is separate from the GUI.
 Start with read-only queries and idle/reconnect checks. Use only a deliberately
 chosen lab service for restart testing.
 

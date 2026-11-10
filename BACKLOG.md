@@ -29,7 +29,7 @@ ID, level, time, and text filters with full message/raw details. Dedicated views
 unchanged builtin scripts and frozen prepared commands. Failed refreshes retain old
 records but disable stale service actions; endpoint/profile changes clear results.
 Small-window views scroll without collapsing tables, and light/dark themes are
-covered by offscreen Qt captures. No new protocol methods, standalone service
+covered by offscreen Qt captures. No new protocol methods, separate service
 start/stop, server-side event filters, or older-event pagination were added.
 The separate package is `wmibench-linux-workspaces-preview.tar.gz`. Verification
 is local fixtures and Qt only; no SSH, live target tests, or remote deployment.
@@ -111,7 +111,7 @@ interoperability has offline fixtures only; no live remote testing or SSH.
 ## User Test Package - September 22, 2026
 
 The user requested packaging the existing work now, with no additional commands.
-`dist/wmibench-linux-wmi-preview.tar.gz` contains the current persistent Linux WMI
+The repository contains the current persistent Linux WMI
 backend and sysinfo integration. Setup and manual checks are in
 `packaging/linux/TESTING-WMI.md`. Packaging does not establish live interoperability.
 The prior standard archive and installed Ubuntu diagnostic remain unchanged.
@@ -166,8 +166,8 @@ Next: part 4b, one read-only OS query and structured result decoding.
 
 Fixed the decoder rejecting nonzero ORPCTHAT flags: MS-DCOM requires ignoring them.
 Non-null extensions still fail explicitly, with the actual header values reported.
-111 local tests and 68 Ubuntu protocol tests pass. Updated the persistent standalone
-diagnostic; it is not the full GUI package.
+111 local tests and 68 Ubuntu protocol tests pass. Updated the persistent diagnostic;
+it is not the full GUI package.
 
 At 2026-09-22 00:34:58 UTC, live Ubuntu-to-Windows activation obtained the WMI login
 interface, reached its TCP exporter, and confirmed protected reference release.
@@ -177,7 +177,7 @@ Next milestone: namespace login and one read-only OS query, not yet implemented.
 
 ## DCOM Milestone - September 21, 2026
 
-Part 3 now has a standalone activation/release diagnostic and bounded NDR32 codecs,
+Part 3 now has an activation/release diagnostic and bounded NDR32 codecs,
 sharing the protected RPC association from part 2a. No Impacket, SMB, WinRM fallback,
 namespace queries, GUI integration, or installer rebuild. Regression results:
 106 tests pass on Windows and 63 protocol-focused tests pass on Ubuntu.

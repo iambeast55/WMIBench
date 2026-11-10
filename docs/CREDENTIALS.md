@@ -30,9 +30,10 @@ leave half an update. Plaintext passwords are not written into the database.
 
 The encryption key is in `wmibench.key` beside the database:
 
-- Linux: `~/.local/share/WMIBench/wmibench.key`, owned by the current user with
+- Repository launchers: `wmibench.key` beside the database in the checkout, owned by the current user with
   permissions 0600. A key readable by other users is rejected.
-- Windows: `%LOCALAPPDATA%/WMIBench/wmibench.key`, protected using the current
+- Direct per-user launch: `%LOCALAPPDATA%/WMIBench/wmibench.key` on Windows or
+  `~/.local/share/WMIBench/wmibench.key` on Linux, protected using the current
   Windows user's DPAPI. A copied key may not be usable from another account/machine.
 
 Close the app before backing up the database and key together. Protect that backup

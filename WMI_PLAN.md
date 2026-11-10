@@ -8,7 +8,7 @@ gate before building the next part. Part 4b, session reuse (5), and initial Linu
 `sysinfo` integration (6) are implemented in source but remain experimentally
 validated by local fixtures only, except for the earlier native object-codec smoke.
 Do not describe Linux query/session interoperability as verified. The user later
-requested the current work packaged for testing: `dist/wmibench-linux-wmi-preview.tar.gz`.
+requested the current work tested from the repository checkout.
 SSH, Ubuntu deployment, and live testing have not been performed.
 
 ## Custom Linux Client Milestones - September 20, 2026
@@ -19,7 +19,7 @@ relay. Established authentication/cryptography primitives may be used later;
 we will not invent cryptography. Existing Windows COM and PSRP adapters stay intact.
 This sequence supersedes the historical delivery sequence below.
 
-1. **RPC connection probe - implemented and verified on Windows and Linux.** The standalone
+1. **RPC connection probe - implemented and verified on Windows and Linux.** The diagnostic
    `remoteops.remoting.rpc_probe` module builds an unauthenticated endpoint-mapper
    v3.0 / NDR v2.0 bind, checks the response, and closes the TCP socket without
    sending RPC requests. Numeric IPs only; default port 135. It uses a total
@@ -31,7 +31,7 @@ This sequence supersedes the historical delivery sequence below.
    from Ubuntu to the approved remote Windows host's TCP port 135. The server
    accepted endpoint mapper v3.0 / NDR v2.0. No Windows credentials were used.
    This gate is complete; it does not itself test authentication or WMI readiness.
-2. **Authenticated RPC - NTLM subpart implemented and live-verified.** The standalone
+2. **Authenticated RPC - NTLM subpart implemented and live-verified.** The diagnostic
    `remoteops.remoting.rpc_auth_probe` performs NTLMv2 over TCP, requires packet
    privacy and header signing, and validates a protected `IObjectExporter.ServerAlive`
    reply before reporting success. This read-only native RPC call neither activates
@@ -67,7 +67,7 @@ This sequence supersedes the historical delivery sequence below.
    Earlier access-denied attempts are historical; their cause was not established,
    and this flags fix does not itself explain those faults. No target policies were
    changed by the agent. Namespace access, queries, and persistent sessions remain
-   untested. The standalone diagnostic stays installed in the Ubuntu user's home.
+   untested. The diagnostic remains separate from the GUI.
 4. **One WMI query - 4a complete; 4b implemented with live gate deferred.**
    The existing diagnostic now accepts `--namespace root/cimv2`. It uses protected
    IWbemLevel1Login.NTLMLogin opnum 6, validates the returned IWbemServices identity,
@@ -76,7 +76,7 @@ This sequence supersedes the historical delivery sequence below.
    A nonexistent namespace returned 0x8004100e at 00:43:52 UTC, with exit code 1 and
    login-reference release confirmed. 128 Windows tests and 85 Ubuntu protocol tests
    pass. Denied namespace access, malformed replies, and cancellation use fixtures.
-   The standalone Ubuntu installation is updated; GUI and installer are unchanged.
+   The Ubuntu checkout is updated; the GUI uses the same source tree.
    Cross-exporter namespace references remain unsupported and report uncertain cleanup
    rather than being released through the wrong exporter.
    Part 4b now adds `--query-os`, a fixed seven-property Win32_OperatingSystem SELECT
@@ -113,7 +113,7 @@ This sequence supersedes the historical delivery sequence below.
 The first useful end-to-end target is: connect once, run `sysinfo` repeatedly,
 disconnect cleanly. A reusable WMI connection is not a PowerShell runspace.
 
-The standalone probes remain separate from the GUI session backend. Both can run
+The diagnostic probes remain separate from the GUI session backend. Both can run
 from the source tree as described in README.md; the distributable has not been rebuilt.
 Do not interpret a successful unauthenticated bind as WMI readiness,
 or a rejected unauthenticated bind as proof that authenticated WMI cannot work.

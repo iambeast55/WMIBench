@@ -167,8 +167,8 @@ $env:PYTHONPATH = "src"
 From the installed Linux application, use its interpreter (adjust for a custom install):
 
 ```bash
-~/.local/share/WMIBench-app/.venv/bin/python -m remoteops.commands.plugin_cli validate /path/to/my-bios
-~/.local/share/WMIBench-app/.venv/bin/python -m remoteops.commands.plugin_cli test /path/to/my-bios --trust
+./.venv/bin/python -m remoteops.commands.plugin_cli validate /path/to/my-bios
+./.venv/bin/python -m remoteops.commands.plugin_cli test /path/to/my-bios --trust
 ```
 
 Validation never runs Python code. Testing explicitly executes both the implementation
