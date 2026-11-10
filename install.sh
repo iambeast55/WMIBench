@@ -17,5 +17,10 @@ command -v "$PYTHON" >/dev/null 2>&1 || {
 mkdir -p "$ROOT/plugins"
 chmod +x "$ROOT/run.sh"
 
+BIN_DIR="${XDG_BIN_HOME:-$HOME/.local/bin}"
+mkdir -p "$BIN_DIR"
+ln -sfn "$ROOT/run.sh" "$BIN_DIR/wmibench"
+
 echo "WMIBench installed in $ROOT/.venv"
-echo "Run: ./run.sh"
+echo "Run: wmibench or ./run.sh"
+echo "Launcher: $BIN_DIR/wmibench"

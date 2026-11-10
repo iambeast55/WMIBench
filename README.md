@@ -13,6 +13,7 @@ Linux:
 ```bash
 ./install.sh
 ./run.sh
+# After install, wmibench is also available from PATH.
 ```
 
 Windows PowerShell:
