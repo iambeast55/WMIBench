@@ -100,12 +100,3 @@ Saved passwords and keys are encrypted in SQLite. The encryption key is protecte
 on Windows or file permissions on Linux. Back up both the database and key;
 copying the database alone does not transfer saved credentials to another account.
 See [Credentials](docs/CREDENTIALS.md).
-
-## Development
-
-```text
-python -m unittest discover -s tests -v
-```
-
-Tests use fake transports and local fixtures. They do not run commands on remote hosts.
-Protocol notes and remaining backend work are in [WMI plan](WMI_PLAN.md).
