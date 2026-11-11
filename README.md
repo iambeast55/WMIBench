@@ -1,12 +1,8 @@
 # WMIBench
 
-A desktop console for Windows administration over WMI/DCOM and WinRM.
-Save hosts and credentials, connect once, and run commands through the same session.
+A graphical interface implementation of evil-winrm/wmiexec. Allows for executing custom commands, powershell scripts, and WMI based queries. This project was mainly an experiment to see how well AI can implmenet a fully featured tool that can interact with underlying windows operations. 
 
 ## Install and run
-
-Use the scripts from the repository root. They create `.venv`, install the source
-in editable mode, and keep plugins and application data in this folder.
 
 Linux:
 
@@ -35,17 +31,12 @@ For Linux proxychains use, see [Proxychains](docs/PROXYCHAINS.md).
 
 ## Workspace
 
-The host tree supports named groups, drag-and-drop ordering, and right-click
-connect/disconnect, move, rename, and delete actions. Deleting a group moves its
-hosts to Ungrouped. Deleting a host disconnects it and keeps its history and credentials.
-
-- **Terminal:** command aliases, argument completion, command history, and full error output.
-- **History:** previous runs, structured results, search, and CSV export.
-- **Services / Events:** dedicated views with filters and record details.
-- **Tools:** command runner, file browser, processes, and users/sessions.
-- **Explorer:** WMI namespaces, classes, property types, method parameters, instance queries,
-  and Python examples for plugins.
-- **Multi-host:** bounded read-only batches with per-host results and combined exports.
+- **Terminal:** 
+- **History:** 
+- **Services / Events:** 
+- **Tools:** 
+- **Explorer:** 
+- **Multi-host:** 
 
 Examples:
 
@@ -57,22 +48,10 @@ svc Spooler
 events --help
 ```
 
-Completion follows the selected connection type and each command's parameter schema.
-Tab or Enter accepts a suggestion; accepting it does not run the command.
-Up/Down recalls earlier commands when the suggestion list is closed.
-
-Explorer class inspection works with native Windows WMI and with WinRM from either
-client OS. Copied method examples can be used in a plugin.
-See [Explorer](docs/EXPLORER.md).
-
 ## Plugins
 
-Each plugin is a folder containing `command.json` and `implementation.py`.
-Add it through **Commands > Python commands**, or put it in the repository's
-`plugins` directory. Valid plugins load automatically; saved edits apply on the next run.
-
-Plugins run locally under your account. Their `ctx` calls use the selected remote
-connection; plugin code also has access to local files and application data.
+Plugins are python based scripts that can be added. These scripts can interact with the local system and remote host, allowing for further extensibility. 
+Add it through **Commands > Python commands**, or put it in the repository's `plugins` directory.
 
 - [Write a command](docs/PYTHON_COMMANDS.md)
 - [Plugin API and parameter schema](docs/PLUGIN_API.md)
