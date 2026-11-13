@@ -1,0 +1,16 @@
+{
+  "api_version": 3,
+  "alias": "donut",
+  "name": "Donut Loading",
+  "description": "Inject a donut binary.",
+  "category": "Injection",
+  "parameters": {
+    "_schema": {
+      "file": {"type": "str", "required": true, "description":"Local path to donut binary file."},
+      "processid": {"type": "int", "required": true, "description":"Remote Process ID to inject into."}
+    }
+  },
+  "backends": ["winrm"],
+  "modifies_remote": true,
+  "entry_point": "implementation.py:run"
+}

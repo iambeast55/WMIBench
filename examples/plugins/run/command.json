@@ -1,0 +1,26 @@
+{
+  "api_version": 2,
+  "alias": "run",
+  "name": "--Run--",
+  "description": "Run a Excecutable.",
+  "category": "Python",
+  "parameters": {"_positional":["absolute_path"],
+  "_schema":{
+    "absolute_path": {
+      "type": "str",
+      "required": true,
+      "description": "Run a Excecutable based on absolute path."
+    },
+    "args": {
+      "type": "str",
+      "required": false,
+      "description": "Arguments to pass to the executable."
+    }
+  }
+},
+  "backends": [
+    "wmi_dcom"
+  ],
+  "modifies_remote": true,
+  "entry_point": "implementation.py:run"
+}

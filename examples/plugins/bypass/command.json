@@ -1,0 +1,10 @@
+{
+  "api_version": 3,
+  "alias": "bypass",
+  "name": "Bypass",
+  "description": "Bypass AMSI",
+  "category": "Injection",
+  "backends": ["winrm"],
+  "modifies_remote": true,
+  "entry_point": "implementation.py:run"
+}
