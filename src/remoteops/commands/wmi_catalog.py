@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import json
 import math
+import ntpath
 import re
 import time
 from collections.abc import Callable, Mapping
@@ -156,6 +157,7 @@ WMI_CATALOG: dict[str, QuerySpec | None] = {
         "DeviceID": CIM_STRING, "VolumeName": CIM_STRING,
         "FreeSpace": CIM_UINT64, "Size": CIM_UINT64,
     }, "DriveType=3"),
+    "dir": None,
     "services": _SERVICE,
     "restart-service": None,
     "admins": None,
@@ -215,6 +217,7 @@ WMI_ALIASES = frozenset(WMI_CATALOG)
 WMI_NOTES = {
     "sysinfo": "Seven native OS fields; TotalVisibleMemorySize is in KiB, dates are CIM text.",
     "disk": "Fixed disks only; FreeGB and SizeGB use 1024**3 bytes. Unknown sizes stay null.",
+    "dir": "Lists one directory level using Win32_Directory and CIM_DataFile.",
     "services": "Native State and StartMode fields; these differ from Get-Service columns.",
     "restart-service": (
         "Stops, waits for Stopped, starts, and waits for Running within one deadline. "
@@ -297,7 +300,9 @@ def _values(alias: str, values: Mapping[str, object]) -> dict[str, object]:
     if not isinstance(values, Mapping):
         raise ValueError("Command values must be a mapping")
     defaults: dict[str, object] = {}
-    if alias in {"svc", "restart-service"}:
+    if alias == "dir":
+        defaults = {"path": "C:\\"}
+    elif alias in {"svc", "restart-service"}:
         defaults = {"service_name": "Spooler"}
     elif alias == "events":
         defaults = {"log": "System", "count": 50}
@@ -306,7 +311,7 @@ def _values(alias: str, values: Mapping[str, object]) -> dict[str, object]:
     if any(key not in defaults for key in values):
         raise ValueError(f"Unexpected parameter for WMI command {alias}")
     result = defaults | dict(values)
-    for key in ("service_name", "log"):
+    for key in ("service_name", "log", "path"):
         if key in result and not _text(result[key]).strip():
             raise ValueError(f"{key} must not be empty")
     if "count" in result:
@@ -426,6 +431,62 @@ def _pending_reboot(execution: _Execution) -> list[dict]:
             raise WmiCommandError(f"StdRegProv.EnumKey failed for HKLM\\{key}: ReturnValue={status}")
         rows.append({"Path": "HKLM:\\" + key, "Exists": status == 0})
     return rows
+
+
+def _directory_parts(value: object) -> tuple[str, str, str]:
+    if not isinstance(value, str) or not value or len(value) > 900 or any(
+        character in value for character in '\x00\r\n*?"<>|'
+    ):
+        raise WmiCommandError("Enter an absolute drive path, such as C:\\Windows.")
+    path = value.replace("/", "\\")
+    drive, tail = ntpath.splitdrive(path)
+    if (len(drive) != 2 or not drive[0].isalpha() or drive[1] != ":"
+            or not tail.startswith("\\") or ":" in tail):
+        raise WmiCommandError("Use an absolute drive path; UNC paths and alternate streams are not supported.")
+    path = ntpath.normpath(path)
+    _, tail = ntpath.splitdrive(path)
+    return path, drive, tail.rstrip("\\") + "\\"
+
+
+def _directory(execution: _Execution, values: dict[str, object]) -> list[dict]:
+    path, drive, folder = _directory_parts(values["path"])
+    exists = execution.query(QuerySpec(CIMV2, "Win32_Directory", {
+        "Name": CIM_STRING,
+    }, "Name=" + wql_literal(path), max_rows=1, take=1))
+    if not exists:
+        raise WmiCommandError("Directory not found or not accessible.")
+
+    directories = execution.query(QuerySpec(CIMV2, "Win32_Directory", {
+        "Name": CIM_STRING, "Drive": CIM_STRING, "Path": CIM_STRING,
+        "LastModified": CIM_DATETIME,
+    }, "Drive=" + wql_literal(drive) + " AND Path=" + wql_literal(folder)))
+    files = execution.query(QuerySpec(CIMV2, "CIM_DataFile", {
+        "Name": CIM_STRING, "Drive": CIM_STRING, "Path": CIM_STRING,
+        "FileSize": CIM_UINT64, "LastModified": CIM_DATETIME,
+    }, "Drive=" + wql_literal(drive) + " AND Path=" + wql_literal(folder)))
+
+    rows = []
+    for row in directories:
+        name = row.get("Name")
+        if isinstance(name, str) and name.casefold() != path.casefold():
+            rows.append({
+                "Name": name,
+                "Kind": "Directory",
+                "FileSize": None,
+                "LastModified": row.get("LastModified"),
+            })
+    for row in files:
+        name = row.get("Name")
+        if isinstance(name, str):
+            rows.append({
+                "Name": name,
+                "Kind": "File",
+                "FileSize": row.get("FileSize"),
+                "LastModified": row.get("LastModified"),
+            })
+    if len(rows) > DEFAULT_MAX_ROWS:
+        raise WmiCommandError("More than 10,000 items matched. No partial results displayed.")
+    return sorted(rows, key=lambda row: (row["Kind"] != "Directory", row["Name"].casefold()))
 
 
 def _service_row(execution: _Execution, spec: QuerySpec) -> dict:
@@ -603,7 +664,9 @@ def execute_command(alias: str, values: Mapping[str, object], query_callback: Qu
     """
     parameters = _values(alias, values)
     execution = _Execution(query_callback, method_callback, timeout_seconds)
-    if alias == "admins":
+    if alias == "dir":
+        rows = _directory(execution, parameters)
+    elif alias == "admins":
         rows = _admins(execution)
     elif alias == "pending-reboot":
         rows = _pending_reboot(execution)

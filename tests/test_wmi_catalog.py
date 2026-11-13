@@ -31,7 +31,7 @@ def provider_values(spec):
 class CatalogTests(unittest.TestCase):
     def test_every_builtin_alias_has_handler_and_help(self):
         self.assertEqual(catalog.WMI_ALIASES, {item.alias for item in BUILTIN_TEMPLATES})
-        self.assertEqual(len(catalog.WMI_ALIASES), 21)
+        self.assertEqual(len(catalog.WMI_ALIASES), 22)
         for template in BUILTIN_TEMPLATES:
             with self.subTest(alias=template.alias):
                 self.assertTrue(prepare_command(template.alias).native_wmi)
@@ -101,6 +101,23 @@ class CatalogTests(unittest.TestCase):
         rows, _ = catalog.execute_command("topcpu", {"count": 2}, query, Mock(), 10)
         self.assertEqual([row["Name"] for row in rows], ["high", "low"])
         self.assertEqual([row["CPU"] for row in rows], [10, 2])
+
+    def test_directory_listing_is_scoped_and_combines_directories_and_files(self):
+        query = Mock(side_effect=[
+            [{"Name": "C:\\Windows"}],
+            [{"Name": "C:\\Windows\\Temp", "LastModified": "directory-time"}],
+            [{"Name": "C:\\Windows\\boot.ini", "FileSize": 42, "LastModified": "file-time"}],
+        ])
+        rows, trace = catalog.execute_command("dir", {"path": "C:/Windows"}, query, Mock(), 10)
+        self.assertEqual([row["Kind"] for row in rows], ["Directory", "File"])
+        self.assertEqual(rows[1]["FileSize"], 42)
+        self.assertIn("Drive='C:' AND Path='\\\\Windows\\\\'", trace)
+        self.assertEqual(query.call_count, 3)
+
+    def test_directory_listing_rejects_non_absolute_paths_before_dispatch(self):
+        for path in ("C:Windows", "\\\\server\\share", "C:\\x:stream", "C:\\*"):
+            with self.subTest(path=path), self.assertRaises(catalog.WmiCommandError):
+                catalog.execute_command("dir", {"path": path}, Mock(), Mock(), 10)
 
     def event_provider(self, numbers):
         def query(spec, timeout):

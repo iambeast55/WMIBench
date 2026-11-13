@@ -31,6 +31,11 @@ by import. Edit the imported alias/ID in its separate JSON file before retrying.
 Duplicating a custom query preserves its WMI definition. A built-in workflow with
 no explicit query definition does not acquire a new WMI handler by being renamed.
 
+To back up a command created in the interface, select it and use **Export Selected**.
+That JSON file is portable. The active library is also stored as `commands.json` in
+the configured data directory. Python commands are folders under `plugins/`; copy
+the command folder and any local module files it references.
+
 Working import files are included in `examples/wmi/bios.json` and
 `examples/wmi/service-status.json`. Automated tests load, compile, and decode
 fixtures for both examples. For a quick start, import the BIOS example and run

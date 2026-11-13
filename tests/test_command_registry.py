@@ -63,3 +63,18 @@ class CommandRegistryTests(unittest.TestCase):
 
             self.assertEqual(source, "Hostname")
             self.assertEqual(resolved, "hostname")
+
+    def test_active_library_adds_new_builtin(self) -> None:
+        import tempfile
+        from pathlib import Path
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "commands.json"
+            registry = CommandRegistry(path)
+            data = json.loads(path.read_text(encoding="utf-8"))
+            data["commands"] = [item for item in data["commands"] if item["alias"] != "dir"]
+            path.write_text(json.dumps(data), encoding="utf-8")
+
+            loaded = CommandRegistry(path)
+            self.assertIn("dir", loaded.aliases())
+            self.assertTrue(loaded.prepare("dir C:\\Windows").native_wmi)

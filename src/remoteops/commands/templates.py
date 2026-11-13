@@ -43,6 +43,31 @@ BUILTIN_TEMPLATES: tuple[CommandTemplate, ...] = (
         ),
     ),
     CommandTemplate(
+        name="Directory listing",
+        alias="dir",
+        description="List files and directories at an absolute Windows path.",
+        parameters={
+            "_schema": {
+                "path": {
+                    "type": "str",
+                    "default": "C:\\",
+                    "description": "Absolute remote directory path",
+                },
+            },
+            "_positional": ["path"],
+            "_examples": ["dir C:\\Windows", "dir --path C:\\Users"],
+        },
+        script=(
+            "$path = '$path'\n"
+            "if (-not (Test-Path -LiteralPath $path -PathType Container)) { throw 'Directory not found or not accessible.' }\n"
+            "$items = @(Get-ChildItem -LiteralPath $path -Force)\n"
+            "if ($items.Count -gt 10000) { throw 'More than 10,000 items matched. No partial results displayed.' }\n"
+            "$items | Select-Object @{n='Name';e={$_.FullName}},"
+            "@{n='Kind';e={if ($_.PSIsContainer) {'Directory'} else {'File'}}},"
+            "@{n='FileSize';e={if ($_.PSIsContainer) {$null} else {$_.Length}}},LastWriteTime,Attributes"
+        ),
+    ),
+    CommandTemplate(
         name="List services",
         alias="services",
         description="List services with status, name, and display name.",
@@ -201,7 +226,7 @@ BUILTIN_TEMPLATES: tuple[CommandTemplate, ...] = (
 TEMPLATES_BY_ALIAS = {template.alias: template for template in BUILTIN_TEMPLATES if template.alias}
 
 CATEGORIES = {
-    "System": {"sysinfo", "disk", "uptime", "hotfixes", "pending-reboot", "startup"},
+    "System": {"sysinfo", "disk", "dir", "uptime", "hotfixes", "pending-reboot", "startup"},
     "Services": {"services", "svc", "restart-service"},
     "Processes": {"procs", "topcpu", "tasks"},
     "Network": {"net", "ports", "shares", "firewall"},
@@ -276,6 +301,13 @@ class CommandRegistry:
 
         original = self.path.read_bytes()
         version, candidates = self._parse(original)
+        # Active libraries created by older releases need newly shipped built-ins.
+        # Exported command files remain self-contained and are not changed.
+        aliases = {template.alias.lower() for template in candidates}
+        if (self.path.name == "commands.json" and "dir" not in aliases
+                and any(alias in TEMPLATES_BY_ALIAS for alias in aliases)):
+            candidates.append(deepcopy(TEMPLATES_BY_ALIAS["dir"]))
+            self._write(self.path, candidates)
         self._validate_aliases(candidates)
         if version == 1:
             backup = self.path.with_name(self.path.name + ".v1.bak")

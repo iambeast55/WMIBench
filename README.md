@@ -42,6 +42,7 @@ Examples:
 
 ```text
 sysinfo
+dir C:\Windows
 services
 events --log Application --count 25
 svc Spooler
